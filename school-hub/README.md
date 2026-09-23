@@ -62,7 +62,7 @@ against school accounts you don't have a legitimate right to access.
 Open a terminal (Terminal.app on Mac, PowerShell on Windows), then:
 
 ```
-git clone <this repo>
+git clone https://github.com/stuartpauljames/school-hub.git
 cd school-hub
 npm install
 npx playwright install chromium
