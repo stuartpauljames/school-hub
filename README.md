@@ -11,6 +11,13 @@ A Class Charts connector also exists (`src/connectors/classCharts.js`) but
 isn't part of the guided setup wizard -- see "Adding Class Charts by hand"
 below if you want it.
 
+**New to this, or setting it up for someone else?** Open `SETUP.md` instead
+-- it's a plain-English walkthrough of the same setup, written for someone
+who isn't necessarily comfortable in a terminal. This file covers the same
+ground more tersely (for anyone already comfortable with git/npm), plus
+everything SETUP.md leaves out: architecture, troubleshooting, adding Class
+Charts, and every other advanced option.
+
 Works on **Mac** (via `launchd`) and **Windows** (via Task Scheduler) --
 `npm run install-service` detects your OS automatically.
 
@@ -52,8 +59,10 @@ against school accounts you don't have a legitimate right to access.
 
 ## Quick setup
 
+Open a terminal (Terminal.app on Mac, PowerShell on Windows), then:
+
 ```
-git clone <this repo>
+git clone https://github.com/stuartpauljames/school-hub.git
 cd school-hub
 npm install
 npx playwright install chromium
@@ -65,11 +74,11 @@ your Google Calendar (with a real dropdown of your actual calendars to pick
 from, not a pasted-in ID), your children's names, your school app logins,
 and finally two clearly ordered buttons -- run a test check first, then
 install everything to run automatically. No manual file editing required.
-This is what `SETUP.md` walks through for a less technical audience.
 
-Prefer the terminal? `npm run setup` is a text-based version of the same
-wizard (no live calendar picker, just paste in a calendar ID), followed by
-`npm run authorize-google`, `npm run install-service`, and `npm run doctor`.
+Prefer the terminal throughout? `npm run setup` is a text-based version of
+the same wizard (no live calendar picker, just paste in a calendar ID),
+followed by `npm run authorize-google`, `npm run install-service`, and
+`npm run doctor`.
 
 `npm run install-service` detects whether you're on Mac or Windows and
 installs the right kind of background service automatically -- on Mac this
