@@ -20,7 +20,9 @@ Works on both **Mac** and **Windows**.
 
 ## Setup
 
-1. Unzip this folder somewhere sensible, like Documents.
+1. Go to https://github.com/stuartpauljames/school-hub. Click the green
+   **Code** button, then **Download ZIP**. Unzip it somewhere sensible,
+   like Documents.
 2. Open a terminal:
    - **Mac**: press Cmd+Space, type "Terminal", press enter.
    - **Windows**: press the Windows key, type "PowerShell", press enter.
