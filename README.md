@@ -1,11 +1,15 @@
 # School Hub
 
-A personal aggregator that checks ClassDojo, ClassCharts, and MyChildAtSchool,
-extracts calendar-worthy events with Gemini (free), and either adds them
-straight to your Google Calendar (high confidence) or emails you an
-approve/decline link (lower confidence). Runs entirely on your own computer
--- nothing is hosted anywhere else, and your school app passwords never
-leave your machine.
+A personal aggregator that checks ClassDojo and MyChildAtSchool, extracts
+calendar-worthy events with Gemini (free), and either adds them straight to
+your Google Calendar (high confidence) or emails you an approve/decline
+link (lower confidence). Runs entirely on your own computer -- nothing is
+hosted anywhere else, and your school app passwords never leave your
+machine.
+
+A Class Charts connector also exists (`src/connectors/classCharts.js`) but
+isn't part of the guided setup wizard -- see "Adding Class Charts by hand"
+below if you want it.
 
 Works on **Mac** (via `launchd`) and **Windows** (via Task Scheduler) --
 `npm run install-service` detects your OS automatically.
@@ -14,10 +18,10 @@ Works on **Mac** (via `launchd`) and **Windows** (via Task Scheduler) --
 
 This is designed to be self-hosted: each family runs their own copy, with
 their own credentials, on their own computer. The connectors are built
-against ClassDojo, ClassCharts, and MyChildAtSchool themselves -- not
-anything specific to one school -- so if your children's school uses these
-same apps, this should work without needing to change any of the scraping
-code. You'll just need to bring your own:
+against ClassDojo and MyChildAtSchool themselves -- not anything specific
+to one school -- so if your children's school uses these same apps, this
+should work without needing to change any of the scraping code. You'll
+just need to bring your own:
 - A free Gemini API key
 - Your own Google Cloud OAuth credentials (a few minutes to set up)
 - Your own school app logins
@@ -31,10 +35,9 @@ against school accounts you don't have a legitimate right to access.
 - **ClassDojo and MyChildAtSchool have no public API.** The connectors for
   them use Playwright to drive a real browser and log in as you. This is
   fragile by nature -- it can break when either site changes its UI.
-- **Class Charts' parent login has reCAPTCHA protection** that can't
-  reliably be automated. This connector instead logs in as each *child*,
-  using their own pupil code + date of birth (the same login they'd use at
-  school) -- ask your school for this if you don't already have it.
+- **Class Charts isn't in the guided wizard**, and its parent login has
+  reCAPTCHA protection that can't reliably be automated -- see "Adding
+  Class Charts by hand" below if you want to add it separately.
 - **ClassDojo is exploring an official API/MCP server.** Worth signing up
   for early access at https://www.classdojo.com/classdojo-api-mcp/ -- if it
   ships, it should replace the ClassDojo connector with something far more
@@ -123,6 +126,23 @@ sudo pmset repeat wake MTWRFSU 07:00:00
 (Windows machines generally stay more consistently awake/asleep based on
 their own power settings; adjust those in Settings > System > Power if
 needed.)
+
+## Adding Class Charts by hand (not in the guided wizard)
+
+Class Charts isn't part of `npm run configure` or `npm run setup` -- it
+needs a child's own pupil login code + date of birth rather than a parent
+account (Class Charts' parent web login has reCAPTCHA protection that can't
+be automated around; the connector instead uses the tested `StudentClient`
+path from the `classcharts-api` library). To add it:
+
+1. Get each child's pupil code from their school (a short code they'd use
+   to log in themselves, separate from anything sent to you as the parent).
+2. Add this line to your `.env` by hand:
+   ```
+   CLASSCHARTS_STUDENTS=Name,code,DOB;Name,code,DOB
+   ```
+   (DOB as `DD/MM/YYYY`, semicolon between children if you have more than one)
+3. It'll be picked up automatically on the next run -- no other changes needed.
 
 ## Manual setup on Mac (advanced / without the wizard)
 
