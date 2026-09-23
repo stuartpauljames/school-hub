@@ -8,6 +8,8 @@ stay on your machine.
 
 Works on both **Mac** and **Windows**.
 
+*(Already comfortable with git and the command line? `README.md` in this same folder covers the same setup more tersely, plus architecture, troubleshooting, and advanced options this file doesn't cover.)*
+
 ## What you'll need
 
 - A Mac or Windows PC
