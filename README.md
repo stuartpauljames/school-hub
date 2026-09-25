@@ -37,6 +37,11 @@ Nothing here is a hosted service -- there's no shared server, and no one
 else's data passes through anyone else's machine. Please don't run this
 against school accounts you don't have a legitimate right to access.
 
+If you're considering sharing the resulting calendar more widely (a whole
+class or year group, not just your own family), see
+`CLASS_REP_GUIDE.md` first -- it covers the real decisions worth making
+before doing that, written from an actual class rollout.
+
 ## Before you start: read this
 
 - **ClassDojo and MyChildAtSchool have no public API.** The connectors for
@@ -49,10 +54,15 @@ against school accounts you don't have a legitimate right to access.
   for early access at https://www.classdojo.com/classdojo-api-mcp/ -- if it
   ships, it should replace the ClassDojo connector with something far more
   reliable.
-- **The Windows install path is newer and less battle-tested** than the Mac
-  one -- the Mac version has been used and debugged against a real setup
-  over several days; Windows support was built against documented behavior
-  but hasn't had the same real-world mileage yet.
+- **Windows has now been tested end-to-end** by a real user on Windows 11 --
+  logged in, read real posts, added real events, no duplicates on reruns.
+  A few real setup gaps that testing surfaced (Task Scheduler not finding
+  `.env`, admin rights needed for one of the two scheduled tasks) are fixed
+  in `scripts/platform/windows.js`; see `SETUP.md`'s Windows section for
+  what's still worth knowing.
+- **See `GOOGLE_CALENDAR_SETUP.md`** for the full Google Cloud walkthrough
+  -- the OAuth consent screen setup is the single most common place a
+  first-time user gets stuck, and it's not obvious from Google's own UI.
 - Treat this as a personal tool for your own family. The moment it starts
   handling another family's children's data on your behalf (rather than
   each family running their own copy), different legal obligations apply.
@@ -110,19 +120,27 @@ part of the page, and update the selectors marked with comments explaining
 what to look for. This is the one part that can't be fully automated away,
 regardless of platform.
 
-## Approving/declining from your phone
+## Approving/declining events
 
-Approval emails link to a local dashboard (`src/server.js`), kept running
-continuously by the background service installed above. By default this
-only works on your home network (`http://localhost:4173`). To
-approve/decline from your phone while out and about, you have two options:
-- **Simplest:** just wait until you're home and open the dashboard link then.
-- **Full remote access:** run a free
-  [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/)
-  pointed at port 4173, and put the resulting public URL in
-  `DASHBOARD_PUBLIC_URL` in `.env`. This exposes the dashboard to the
-  internet, protected only by the obscurity of the URL -- fine for a personal
-  tool, but worth knowing.
+The approval email adapts to where you open it. On a normal computer email
+client, it shows one-click Add/Ignore buttons. On a phone, those buttons
+are hidden (they'd point at `localhost`, which only the computer running
+School Hub can reach) -- instead you get a plain notification with a
+reminder to open the dashboard on your computer
+(`http://localhost:4173` by default) to actually act on it.
+
+This uses a CSS media query, which most modern mail apps (Apple Mail,
+current Gmail) respect -- but not every email client does. If a client
+doesn't understand it, you'll just see the buttons regardless of device,
+which is exactly what happened before this existed -- nothing gets worse,
+some clients just don't get the nicer behavior.
+
+If you'd rather check things from your phone properly, the dashboard is
+just a normal local web page -- installing something like
+[Tailscale](https://tailscale.com) and setting `DASHBOARD_PUBLIC_URL` in
+`.env` to the address it gives you will make that same dashboard page
+(with its own working Approve/Ignore buttons) reachable from your phone
+too, but this is entirely optional and not needed for School Hub to work.
 
 ## Waking your computer from sleep (optional)
 
@@ -218,6 +236,12 @@ threshold; if you're getting approval emails for things that were obviously
 fine, you can lower it.
 
 ## Other things worth knowing
+
+- **`CHILD_CALENDARS` and `WHOLE_SCHOOL_CALENDAR_ID`** (both optional) let
+  events route to a separate calendar per child, with whole-school events
+  kept in their own calendar rather than duplicated everywhere. See
+  `CLASS_REP_GUIDE.md` for the full setup -- most single-family setups can
+  ignore this entirely and just use `GOOGLE_CALENDAR_ID` as before.
 
 - **`HOUSEHOLD_CHILDREN`** in `.env` (a comma-separated list of names) is
   passed to the classifier as context, so it can attribute a ClassDojo or
