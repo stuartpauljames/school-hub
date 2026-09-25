@@ -1,0 +1,11 @@
+# Secrets and local state - never commit these
+.env
+.env.*
+google-token.json
+credentials*.json
+data/
+
+# Dependencies, logs and OS junk
+node_modules/
+*.log
+.DS_Store
