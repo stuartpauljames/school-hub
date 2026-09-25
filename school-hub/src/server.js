@@ -93,8 +93,9 @@ const STYLE = `
     margin: 12px 0 16px;
     white-space: pre-wrap;
   }
-  .actions { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; display: flex; gap: 10px; }
-  .btn { display: inline-block; font-size: 13.5px; font-weight: 500; padding: 8px 16px; text-decoration: none; border-radius: 3px; }
+  .actions { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; display: flex; gap: 10px; flex-wrap: wrap; }
+  .actions .btn { flex: 1; text-align: center; min-width: 120px; }
+  .btn { display: inline-block; font-size: 14.5px; font-weight: 500; padding: 12px 20px; text-decoration: none; border-radius: 4px; min-height: 44px; box-sizing: border-box; }
   .btn-primary { background: var(--ink); color: white; }
   .btn-secondary { background: transparent; color: var(--ink); border: 1px solid var(--rule); }
 `;

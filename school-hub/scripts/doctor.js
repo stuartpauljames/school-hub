@@ -2,15 +2,16 @@ import fs from "fs";
 import path from "path";
 import { execSync } from "child_process";
 import { fileURLToPath } from "url";
+import { google } from "googleapis";
 import "dotenv/config";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "..");
 let failures = 0;
 
-function check(label, fn) {
+async function check(label, fn) {
   try {
-    const result = fn();
+    const result = await fn();
     console.log(`✅ ${label}${result ? " -- " + result : ""}`);
   } catch (err) {
     console.log(`❌ ${label} -- ${err.message}`);
@@ -20,30 +21,50 @@ function check(label, fn) {
 
 console.log("School Hub doctor\n------------------\n");
 
-check("Node version", () => {
+await check("Node version", () => {
   const v = process.versions.node;
   if (parseInt(v.split(".")[0], 10) < 20) throw new Error(`v${v} found, need 20 or newer`);
   return `v${v}`;
 });
 
-check(".env file", () => {
+await check(".env file", () => {
   if (!fs.existsSync(path.join(root, ".env"))) throw new Error("not found -- run 'npm run setup'");
   return "found";
 });
 
-check("Gemini API key", () => {
+await check("Gemini API key", () => {
   if (!process.env.GEMINI_API_KEY) throw new Error("missing -- run 'npm run setup'");
   return "set";
 });
 
-check("Google Calendar authorization", () => {
-  if (!fs.existsSync(path.join(root, "data", "google-token.json"))) {
+await check("Google Calendar authorization", async () => {
+  const tokenPath = path.join(root, "data", "google-token.json");
+  if (!fs.existsSync(tokenPath)) {
     throw new Error("not connected -- run 'npm run authorize-google'");
   }
-  return "connected";
+  // A real API call, not just a file-exists check -- this is the only way
+  // to actually catch an expired token (invalid_grant), which a Testing-mode
+  // Google app hits every 7 days. The file can exist and still be useless.
+  try {
+    const tokens = JSON.parse(fs.readFileSync(tokenPath, "utf8"));
+    const client = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET);
+    client.setCredentials(tokens);
+    const calendar = google.calendar({ version: "v3", auth: client });
+    await calendar.calendarList.list({ maxResults: 1 });
+  } catch (err) {
+    if (err.message?.includes("invalid_grant")) {
+      throw new Error(
+        "token expired or revoked -- run 'npm run authorize-google' again. " +
+          "If this keeps happening every ~7 days, publish the Google app " +
+          "(OAuth consent screen -> Publish app) so tokens stop expiring."
+      );
+    }
+    throw new Error(`token exists but the API call failed: ${err.message}`);
+  }
+  return "connected and verified";
 });
 
-check("Gmail credentials for approval emails", () => {
+await check("Gmail credentials for approval emails", () => {
   if (!process.env.GMAIL_ADDRESS || !process.env.GMAIL_APP_PASSWORD) {
     throw new Error("missing -- run 'npm run setup'");
   }
@@ -81,16 +102,16 @@ function windowsTaskStatus(taskName) {
 }
 
 if (process.platform === "darwin") {
-  check("Scraper background service", () => macServiceStatus("com.schoolhub.scraper"));
-  check("Dashboard background service", () => macServiceStatus("com.schoolhub.dashboard"));
+  await check("Scraper background service", () => macServiceStatus("com.schoolhub.scraper"));
+  await check("Dashboard background service", () => macServiceStatus("com.schoolhub.dashboard"));
 } else if (process.platform === "win32") {
-  check("Scraper background task", () => windowsTaskStatus("SchoolHubScraper"));
-  check("Dashboard background task", () => windowsTaskStatus("SchoolHubDashboard"));
+  await check("Scraper background task", () => windowsTaskStatus("SchoolHubScraper"));
+  await check("Dashboard background task", () => windowsTaskStatus("SchoolHubDashboard"));
 } else {
   console.log(`⚠️  No automated service checks for platform "${process.platform}"`);
 }
 
-check("At least one school connector configured", () => {
+await check("At least one school connector configured", () => {
   const hasDojo = process.env.CLASSDOJO_EMAIL;
   const hasMcas = process.env.MCAS_EMAIL;
   const hasCharts = process.env.CLASSCHARTS_STUDENTS;

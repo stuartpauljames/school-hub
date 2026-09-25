@@ -33,10 +33,33 @@ function toCalendarEventId(itemId) {
   return `schoolhub${itemId.replace(/[^a-z0-9]/gi, "").toLowerCase().slice(0, 40)}`;
 }
 
+// Which calendar does this specific event belong on? Three cases, in order:
+// 1. It names a child we have a mapped calendar for -> that child's calendar.
+// 2. It doesn't name a specific child (a whole-school trip, an inset day)
+//    -> the dedicated whole-school calendar, so it isn't duplicated across
+//    every child's calendar.
+// 3. Neither CHILD_CALENDARS nor WHOLE_SCHOOL_CALENDAR_ID is configured at
+//    all -> the single default calendar, exactly as before. This keeps a
+//    simple one-family, one-calendar setup working unchanged.
+function resolveCalendarId(item) {
+  const hasMultiCalendarSetup =
+    Object.keys(config.google.childCalendars).length > 0 || config.google.wholeSchoolCalendarId;
+
+  if (!hasMultiCalendarSetup) return config.google.calendarId;
+
+  const childKey = item.child_name?.toLowerCase();
+  if (childKey && config.google.childCalendars[childKey]) {
+    return config.google.childCalendars[childKey];
+  }
+
+  return config.google.wholeSchoolCalendarId || config.google.calendarId;
+}
+
 export async function upsertCalendarEvent(item) {
   const auth = getAuthedClient();
   const calendar = google.calendar({ version: "v3", auth });
   const eventId = toCalendarEventId(item.id);
+  const calendarId = resolveCalendarId(item);
 
   const eventBody = {
     summary: `${item.category ? `[${item.category}] ` : ""}${item.summary}`,
@@ -52,18 +75,18 @@ export async function upsertCalendarEvent(item) {
 
   try {
     await calendar.events.update({
-      calendarId: config.google.calendarId,
+      calendarId,
       eventId,
       requestBody: eventBody,
     });
-    return { action: "updated", eventId };
+    return { action: "updated", eventId, calendarId };
   } catch (err) {
     if (err.code === 404) {
       await calendar.events.insert({
-        calendarId: config.google.calendarId,
+        calendarId,
         requestBody: { id: eventId, ...eventBody },
       });
-      return { action: "created", eventId };
+      return { action: "created", eventId, calendarId };
     }
     throw err;
   }

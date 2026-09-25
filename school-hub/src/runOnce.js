@@ -21,6 +21,13 @@ async function fetchAllRawItems() {
     const name = labeled[i].name;
     if (r.status === "fulfilled") {
       console.log(`[runOnce] ${name}: ${r.value.length} raw items`);
+      for (const item of r.value) {
+        // A short preview of each raw item, so a future "why wasn't X picked
+        // up" question can be answered by reading the log rather than
+        // needing fresh screenshots -- the full text isn't needed here,
+        // just enough to recognize which message this was.
+        console.log(`[runOnce]   - [${item.postDate || "no date"}] ${item.text.slice(0, 70).replace(/\n/g, " ")}...`);
+      }
       items.push(...r.value);
     } else {
       console.error(`[runOnce] ${name} connector failed:`, r.reason);
@@ -38,8 +45,8 @@ async function main() {
   let newCount = 0;
 
   for (const raw of rawItems) {
-    const id = hashItem(raw.source, raw.text);
-    if (isSeen(id)) continue;
+    const rawId = hashItem(raw.source, raw.text);
+    if (isSeen(rawId)) continue;
     newCount++;
 
     await new Promise((resolve) => setTimeout(resolve, 1500));
@@ -56,28 +63,58 @@ async function main() {
       console.warn(`[runOnce] Classification failed for an item, will retry next run: ${raw.text.slice(0, 60)}...`);
       continue;
     }
-    markSeen(id);
 
-    if (!result.is_event || !result.date) continue;
+    let allEventsSucceeded = true;
 
-    if (raw.childName) result.child_name = raw.childName;
+    for (const event of result.events || []) {
+      if (!event.date) continue;
 
-    const item = {
-      id,
-      source: raw.source,
-      poster: raw.poster,
-      original_text: raw.text,
-      ...result,
-    };
+      if (raw.childName) event.child_name = raw.childName;
 
-    if (result.confidence >= config.autoAddThreshold) {
-      const sync = await upsertCalendarEvent(item);
-      logAdded({ ...item, syncAction: sync.action });
-      console.log(`[runOnce] Auto-added (${result.confidence}%): ${item.summary}`);
+      // A single message can now produce more than one calendar entry (e.g.
+      // a payment deadline and a separate event date) -- each needs its own
+      // id, derived from the specific date + summary, not just the raw
+      // message, so they don't collide with each other or with a
+      // single-event message's id.
+      const eventId = hashItem(raw.source, `${raw.text}::${event.date}::${event.summary}`);
+
+      const item = {
+        id: eventId,
+        source: raw.source,
+        poster: raw.poster,
+        original_text: raw.text,
+        ...event,
+      };
+
+      try {
+        if (event.confidence >= config.autoAddThreshold) {
+          const sync = await upsertCalendarEvent(item);
+          logAdded({ ...item, syncAction: sync.action, calendarId: sync.calendarId });
+          console.log(`[runOnce] Auto-added (${event.confidence}%) to ${sync.calendarId}: ${item.summary}`);
+        } else {
+          addPending(item);
+          await sendApprovalEmail(item);
+          console.log(`[runOnce] Sent for approval (${event.confidence}%): ${item.summary}`);
+        }
+      } catch (err) {
+        // A failure here (e.g. an expired Google token, or a bad Gmail App
+        // Password) shouldn't take down every other item queued up behind
+        // it in this run -- log it and keep going, rather than crashing.
+        console.error(`[runOnce] Failed to save "${item.summary}":`, err.message);
+        allEventsSucceeded = false;
+      }
+    }
+
+    // Only mark the raw message as dealt with once every one of its events
+    // has actually been saved (to the calendar or as an approval email).
+    // If anything failed partway through, leave it unmarked so the whole
+    // message -- including reclassification -- gets retried next run
+    // rather than being silently lost because it was technically
+    // "classified" even though nothing was ever saved.
+    if (allEventsSucceeded) {
+      markSeen(rawId);
     } else {
-      addPending(item);
-      await sendApprovalEmail(item);
-      console.log(`[runOnce] Sent for approval (${result.confidence}%): ${item.summary}`);
+      console.warn(`[runOnce] Not marking as seen due to a save failure above -- will retry next run.`);
     }
   }
 

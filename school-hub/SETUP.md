@@ -21,27 +21,55 @@ Works on both **Mac** and **Windows**.
 ## Setup
 
 1. Go to https://github.com/stuartpauljames/school-hub. Click the green
-   **Code** button, then **Download ZIP**. Unzip it somewhere sensible,
-   like Documents.
-2. Open a terminal:
-   - **Mac**: press Cmd+Space, type "Terminal", press enter.
-   - **Windows**: press the Windows key, type "PowerShell", press enter.
-3. Navigate into the unzipped folder: type `cd ` (with a space after it),
-   then drag the unzipped folder into the window, then press enter.
+   **Code** button, then **Download ZIP**. Unzip it somewhere sensible, like
+   Documents -- **but not inside OneDrive** if you have it, since OneDrive
+   will otherwise back up your passwords to the cloud along with everything
+   else in the folder. `C:\school-hub` (Windows) or `~/Documents/school-hub`
+   (Mac, outside any iCloud Drive folder) are both safe choices.
+2. **Important:** the zip unpacks to an outer folder (e.g.
+   `school-hub-main`) containing an *inner* folder also called
+   `school-hub` -- the actual project. Open that inner folder before doing
+   anything else. If a command later says `Could not read package.json`,
+   you're one level too high; open the inner `school-hub` folder and try
+   again.
+3. Open a terminal **inside that inner folder**:
+   - **Mac**: press Cmd+Space, type "Terminal", press enter, then type
+     `cd ` (with a space after it) and drag the inner folder into the
+     window.
+   - **Windows**: open the inner folder in File Explorer, click the address
+     bar, type `powershell`, and press enter.
 4. Run:
    ```
    npm install
    npx playwright install chromium
    npm run configure
    ```
-5. It'll print a link like `http://localhost:4175` — open that in your
+5. **Keep this terminal window open** for the rest of setup -- the page in
+   your browser stops working the moment this window closes or gets reused
+   for another command.
+6. It'll print a link like `http://localhost:4175` — open that in your
    browser. This walks you through everything with simple forms: connecting
-   your Google Calendar (with a real dropdown to pick which calendar to
-   use), your children's names, and your school app logins. The last screen
-   has two clearly labeled steps — run a test check first to make sure
-   everything works, then install it to run automatically from then on.
+   your Google Calendar (see `GOOGLE_CALENDAR_SETUP.md` in this folder for
+   the full walkthrough, including Google's consent screen setup, which
+   trips up most first-time users), your children's names, and your school
+   app logins. The last screen has two clearly labeled steps — run a test
+   check first to make sure everything works, then install it to run
+   automatically from then on.
 
 That's it. No manual file editing required.
+
+## On Windows specifically
+
+- **Install the background service from an Administrator PowerShell.**
+  Right-click PowerShell in the Start menu and choose "Run as
+  administrator" before running `npm run install-service` -- one of the two
+  background tasks needs elevated rights to register, and installing
+  without it fails without a clear reason.
+- **Class Charts wrong credentials fail loudly, every 45 minutes.** If you
+  haven't set it up, leave those fields blank in the wizard entirely rather
+  than filling in placeholder or incorrect values -- a wrong pupil code or
+  DOB will keep failing with "didn't return authentication cookies" on
+  every single run.
 
 ## If something goes wrong
 
@@ -62,12 +90,14 @@ This checks the most common problems and tells you plainly what to fix.
   check on their site. If you want it, see `README.md` for how to add it
   by hand afterward.
 
-## A note for Windows users specifically
+## Windows: now genuinely tested
 
-The Windows background-service install is built the same way as the Mac
-one and should work, but hasn't been tested on a real Windows machine yet
-the way the Mac version has. If anything looks off after clicking "Install
-background service," that's useful to know about — happy to help debug it.
+A real parent ran this end to end on Windows 11 -- logged into ClassDojo
+and MyChildAtSchool, read real posts, and added real events to a real
+calendar with no duplicates on reruns. The setup issues that came up along
+the way (folder structure, Google's consent screen, the two notes above)
+are already fixed or documented here. If you hit something new, that's
+useful to know about.
 
 ## Prefer the terminal instead?
 

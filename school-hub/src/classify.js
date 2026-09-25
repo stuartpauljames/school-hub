@@ -7,27 +7,34 @@ const PROMPT_TEMPLATE = `You are extracting calendar-worthy events from a single
 
 We only care about events with a specific date that a parent would plausibly want on their calendar (trips, deadlines, meetings, non-uniform days, parents' evenings, deposit due dates etc). Ignore general news, newsletters, praise posts, photo updates, and policy reminders with no date.
 
+IMPORTANT: a single message can contain more than one calendar-worthy date. A common pattern is a payment/response DEADLINE mentioned separately from the actual EVENT DATE itself (e.g. "pay by 27th November" for a trip that happens "14th December"). When that happens, extract them as two SEPARATE entries -- one for the deadline, one for the event -- rather than picking only one. Do not merge them into a single entry or silently prefer one date over the other.
+
 Resolve relative or year-less dates ("next Wednesday", "Friday, September 25") using post_date as the anchor when it's known. If post_date is "unknown", use today instead -- never guess a year from general knowledge, since you don't reliably know the real current date otherwise.
 
 Return ONLY a JSON object, no other text:
 
 {
-  "is_event": boolean,
-  "date": string or null,       // ISO 8601 YYYY-MM-DD, resolved per the anchor-date rule above
-  "end_date": string or null,
-  "child_name": string or null,  // if household_children is known and the message clearly refers to one of them by name, use that exact name
-  "class_name": string or null, // null if the message is school-wide rather than tied to one class
-  "year_group": string or null,
-  "category": one of ["trip", "deadline", "payment", "meeting", "non_uniform", "club", "other"],
-  "summary": string,            // one plain sentence, under 20 words
-  "confidence": number          // 0-100. Score conservatively:
-                                 //   - below 60 if post_date was unknown and the date had to be resolved against today instead
-                                 //   - below 60 if the date required inferring from a relative phrase and the anchor date itself is uncertain
-                                 //   - below 80 if ANY field required guessing rather than being explicitly stated
-                                 //   - only 90+ if the date, and what the event actually is, are both stated plainly
+  "events": [
+    {
+      "date": string,             // ISO 8601 YYYY-MM-DD, resolved per the anchor-date rule above
+      "end_date": string or null,
+      "child_name": string or null,  // if household_children is known and the message clearly refers to one of them by name, use that exact name
+      "class_name": string or null,  // null if the message is school-wide rather than tied to one class
+      "year_group": string or null,
+      "category": one of ["trip", "deadline", "payment", "meeting", "non_uniform", "club", "other"],
+      "summary": string,          // one plain sentence, under 20 words, describing THIS specific date/entry (not the whole message)
+      "confidence": number        // 0-100. Score conservatively:
+                                   //   - below 60 if post_date was unknown and the date had to be resolved against today instead
+                                   //   - below 60 if the date required inferring from a relative phrase and the anchor date itself is uncertain
+                                   //   - below 70 if whether this actually applies is CONDITIONAL on something about this specific child/household that can't be verified from the message alone (e.g. "if your child normally brings a packed lunch...", "if your child hasn't returned their reading book..."). A clear date isn't enough on its own here -- the relevance itself is uncertain, which matters as much as the date being certain.
+                                   //   - below 80 if ANY field required guessing rather than being explicitly stated
+                                   //   - only 90+ if the date, what the event actually is, AND that it unconditionally applies are all stated plainly
+    }
+  ]
 }
 
-If is_event is false, set date, end_date to null and confidence to your confidence in the is_event:false classification itself.
+If the message has no calendar-worthy date at all, return {"events": []}.
+If multiple children are named for one entry, set child_name to null and mention them in that entry's summary.
 
 post_date: {{POST_DATE}}
 today: {{TODAY}}
@@ -67,7 +74,7 @@ export async function classifyItem({ text, source, poster, classContext, postDat
   } catch (err) {
     if (err.name === "AbortError") {
       console.warn("[classify] Gemini request timed out after 30s -- skipping this item for now.");
-      return { is_event: false, confidence: 0, summary: "Timed out, skipped", parse_error: true };
+      return { events: [], parse_error: true };
     }
     throw err;
   } finally {
@@ -76,22 +83,24 @@ export async function classifyItem({ text, source, poster, classContext, postDat
 
   if (res.status === 429) {
     console.warn("[classify] Gemini free-tier rate limit hit -- skipping this item for now.");
-    return { is_event: false, confidence: 0, summary: "Rate limited, skipped", parse_error: true };
+    return { events: [], parse_error: true };
   }
 
   if (!res.ok) {
     const errText = await res.text();
     console.error(`[classify] Gemini API error ${res.status}:`, errText);
-    return { is_event: false, confidence: 0, summary: "API error", parse_error: true };
+    return { events: [], parse_error: true };
   }
 
   const data = await res.json();
   const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
   try {
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed.events)) throw new Error("Response missing 'events' array");
+    return parsed;
   } catch (err) {
     console.error("[classify] Failed to parse model output:", raw);
-    return { is_event: false, confidence: 0, summary: "Could not classify", parse_error: true };
+    return { events: [], parse_error: true };
   }
 }

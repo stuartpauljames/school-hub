@@ -17,7 +17,7 @@ const oAuth2Client = new google.auth.OAuth2(
 
 const authUrl = oAuth2Client.generateAuthUrl({
   access_type: "offline",
-  scope: ["https://www.googleapis.com/auth/calendar.events"],
+  scope: ["https://www.googleapis.com/auth/calendar"], // matches configure-ui.js's scope -- narrower scopes can't list calendars
   prompt: "consent",
 });
 

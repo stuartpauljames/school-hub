@@ -11,6 +11,7 @@ import express from "express";
 import fs from "fs";
 import path from "path";
 import { google } from "googleapis";
+import nodemailer from "nodemailer";
 import { fileURLToPath } from "url";
 import { execSync } from "child_process";
 
@@ -32,6 +33,27 @@ const state = {
 
 const app = express();
 app.use(express.urlencoded({ extended: true }));
+
+function getAuthedCalendarClient() {
+  const client = new google.auth.OAuth2(state.googleClientId, state.googleClientSecret, REDIRECT_URI);
+  client.setCredentials(JSON.parse(fs.readFileSync(tokenPath, "utf8")));
+  return google.calendar({ version: "v3", auth: client });
+}
+
+// Creates a calendar with this exact name, or reuses one that already has
+// it -- so re-running the wizard later (e.g. to add a second child) doesn't
+// create duplicate calendars for names already in use.
+async function createOrGetCalendarByName(name) {
+  const calendar = getAuthedCalendarClient();
+  const { data } = await calendar.calendarList.list();
+  const existing = (data.items || []).find(
+    (c) => c.summary?.trim().toLowerCase() === name.trim().toLowerCase()
+  );
+  if (existing) return existing.id;
+
+  const { data: created } = await calendar.calendars.insert({ requestBody: { summary: name } });
+  return created.id;
+}
 
 const STYLE = `
   :root { --ink: #1b2a4a; --parchment: #faf7f0; --card: #ffffff; --slate: #6b7280; --rule: #e5e0d5; --accent: #4f46e5; }
@@ -79,6 +101,7 @@ app.get("/", (req, res) => {
       <div class="card">
         <p class="lead">This will connect your Google Calendar, add your school app logins, and get everything running in the background. Takes about 10 minutes.</p>
         <p class="lead">Detected platform: <strong>${process.platform === "darwin" ? "Mac" : process.platform === "win32" ? "Windows" : process.platform}</strong> -- no need to choose, the right background service gets installed automatically at the end.</p>
+        <div class="note">Keep this terminal window open until you reach the very last screen. This page stops working the moment that window closes or gets reused for another command.</div>
         ${existing}
         <a class="btn" href="/google">Get started</a>
       </div>
@@ -95,14 +118,29 @@ app.get("/google", (req, res) => {
       "Step 1 of 3",
       `
       <div class="card">
-        <p class="lead">First, create a free Google OAuth Client ID so School Hub can write to your calendar on your behalf.</p>
+        <p class="lead">First, set up a free Google Cloud project so School Hub can write to your calendar. Takes about 10 minutes, no credit card needed.</p>
         <ol style="color:#444; line-height:1.8; font-size:14px;">
-          <li>Go to <a class="link" href="https://console.cloud.google.com" target="_blank">console.cloud.google.com</a></li>
-          <li>Create a project (or use an existing one)</li>
-          <li>Enable the "Google Calendar API"</li>
-          <li>Create Credentials &rarr; OAuth Client ID &rarr; type "Desktop app"</li>
-          <li>Add <code>${REDIRECT_URI}</code> as an authorized redirect URI</li>
+          <li>Go to <a class="link" href="https://console.cloud.google.com" target="_blank">console.cloud.google.com</a>, create a project, and enable the "Google Calendar API"</li>
+          <li>Go to <strong>OAuth consent screen</strong>, click "Get started", and fill in an app name, your email, and audience "External"</li>
+          <li>Under <strong>Audience &rarr; Test users</strong>, add the Gmail address whose calendar you want events added to</li>
+          <li>Under <strong>Branding &rarr; App domain</strong>, put any URL in both the homepage and privacy policy fields (a GitHub repo link works fine for a personal app) -- Google won't let you continue without them</li>
+          <li>Under <strong>Audience</strong>, click <strong>Publish app</strong> and confirm -- this matters: if left in "Testing," Google cancels the connection every 7 days without telling you</li>
+          <li>Go to <strong>Clients &rarr; Create client</strong>, type "Desktop app", and copy the Client ID and secret below (Desktop app clients don't need a redirect URI -- ignore any prompt asking for one)</li>
         </ol>
+        <p class="lead" style="font-size:13px; color:var(--slate);">
+          Full step-by-step with screenshots-worth of detail: see
+          <a class="link" href="https://github.com/stuartpauljames/school-hub/blob/main/GOOGLE_CALENDAR_SETUP.md" target="_blank">GOOGLE_CALENDAR_SETUP.md</a>
+          in the repo.
+        </p>
+        <div class="note">
+          <strong>Right after you click "Connect" below</strong>, Google will show a
+          red warning screen: "Google hasn't verified this app." This is expected --
+          it just means you (not a company) built this, and it's exactly what you'd
+          see for any personal project like this one. Click <strong>Advanced</strong>,
+          then <strong>Go to School Hub (unsafe)</strong>, then <strong>Continue</strong>.
+          "Unsafe" here just means Google hasn't reviewed it, not that anything's
+          actually wrong.
+        </div>
         <form method="POST" action="/google">
           <label>Client ID</label>
           <input type="text" name="clientId" required>
@@ -146,96 +184,19 @@ app.get("/oauth2callback", async (req, res) => {
   }
 });
 
-// ---------- Step 2: pick a calendar ----------
+// ---------- Step 2: name the whole-school calendar ----------
 app.get("/calendar", async (req, res) => {
-  try {
-    const client = new google.auth.OAuth2(state.googleClientId, state.googleClientSecret, REDIRECT_URI);
-    client.setCredentials(JSON.parse(fs.readFileSync(tokenPath, "utf8")));
-    const calendar = google.calendar({ version: "v3", auth: client });
-    const { data } = await calendar.calendarList.list();
-    const options = (data.items || [])
-      .map((c) => `<option value="${c.id}">${c.summary}${c.primary ? " (main calendar)" : ""}</option>`)
-      .join("");
-    res.send(
-      layout(
-        "Choose a calendar",
-        "Step 1 of 3 -- almost done",
-        `
-        <div class="card">
-          <p class="lead">Google connected. Which calendar should school events be added to? (You can create a dedicated "School events" calendar in Google Calendar first if you'd rather keep it separate.)</p>
-          <form method="POST" action="/calendar">
-            <label>Calendar</label>
-            <select name="calendarId" required>${options}</select>
-            <button class="btn" type="submit">Continue</button>
-          </form>
-        </div>
-      `
-      )
-    );
-  } catch (err) {
-    res.status(500).send(
-      layout("Couldn't load your calendars", null, `<div class="card"><p>${err.message}</p><a class="btn secondary" href="/google">Start over</a></div>`)
-    );
-  }
-});
-
-app.post("/calendar", (req, res) => {
-  state.calendarId = req.body.calendarId;
-  res.redirect("/details");
-});
-
-// ---------- Step 3: everything else ----------
-app.get("/details", (req, res) => {
   res.send(
     layout(
-      "Household and school details",
-      "Step 2 of 3",
+      "Create a whole-school calendar",
+      "Step 1 of 3 -- almost done",
       `
       <div class="card">
-        <form method="POST" action="/details">
-          <fieldset class="fieldset">
-            <legend>Children</legend>
-            <div class="hint">Helps School Hub attribute messages to the right child. Comma-separated.</div>
-            <input type="text" name="children" placeholder="e.g. Olive, Edie">
-          </fieldset>
-
-          <fieldset class="fieldset">
-            <legend>Classification</legend>
-            <div class="hint">Free -- get a key at <a class="link" href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a>, no card needed.</div>
-            <label>Gemini API key</label>
-            <input type="text" name="geminiKey" required>
-          </fieldset>
-
-          <fieldset class="fieldset">
-            <legend>Approval emails</legend>
-            <div class="hint">Create an App Password at <a class="link" href="https://myaccount.google.com/apppasswords" target="_blank">myaccount.google.com/apppasswords</a> (needs 2-factor authentication on first).</div>
-            <label>Your Gmail address</label>
-            <input type="email" name="gmailAddress" required>
-            <label>Gmail App Password</label>
-            <input type="text" name="gmailAppPassword" required>
-            <label>Send approvals to <span class="hint" style="display:inline;">(leave blank to use the address above)</span></label>
-            <input type="email" name="notifyEmail">
-          </fieldset>
-
-          <fieldset class="fieldset">
-            <legend>ClassDojo</legend>
-            <div class="hint">Leave blank if you don't use it.</div>
-            <label>Email</label>
-            <input type="email" name="dojoEmail">
-            <label>Password</label>
-            <input type="password" name="dojoPassword">
-          </fieldset>
-
-          <fieldset class="fieldset">
-            <legend>MyChildAtSchool</legend>
-            <div class="hint">Leave blank if you don't use it.</div>
-            <label>Email</label>
-            <input type="email" name="mcasEmail">
-            <label>Password</label>
-            <input type="password" name="mcasPassword">
-          </fieldset>
-
-          <button class="btn" type="submit">Save and continue</button>
+        <p class="lead">Google connected. School Hub will create a dedicated calendar for events that don't belong to one specific child -- whole-school trips, inset days, and so on. This keeps school events separate from your own personal calendar entirely.</p>
+        <form method="POST" action="/calendar">
+          <label>Calendar name</label>
+          <input type="text" name="calendarName" placeholder="e.g. Whole School Events" required>
+          <button class="btn" type="submit">Create and continue</button>
         </form>
       </div>
     `
@@ -243,11 +204,180 @@ app.get("/details", (req, res) => {
   );
 });
 
-app.post("/details", (req, res) => {
+app.post("/calendar", async (req, res) => {
+  try {
+    state.calendarId = await createOrGetCalendarByName(req.body.calendarName.trim());
+    res.redirect("/details");
+  } catch (err) {
+    res.status(500).send(
+      layout("Couldn't create that calendar", null, `<div class="card"><p>${err.message}</p><a class="btn secondary" href="/calendar">Try again</a></div>`)
+    );
+  }
+});
+
+// ---------- Step 3: everything else ----------
+function renderDetailsForm(values = {}, error = null) {
+  const v = (name) => values[name] || "";
+
+  // The child rows are entered dynamically via JS (add one at a time, or
+  // remove one), so the server only ever renders the *shape* of a row here
+  // -- real values (if re-rendering after a validation error) get filled
+  // back in by the same script using JSON embedded in the page.
+  const existingChildren = JSON.stringify(values.children || [{ name: "", class: "" }]);
+
+  return layout(
+    "Household and school details",
+    "Step 2 of 3",
+    `
+      <div class="card">
+        ${error ? `<div class="note">${error}</div>` : ""}
+        <form method="POST" action="/details" id="detailsForm">
+          <fieldset class="fieldset">
+            <legend>Children</legend>
+            <div class="hint">
+              Add each child one at a time. School Hub creates a dedicated calendar
+              named after each class (or reuses one that already has that name), and
+              routes that child's events there. The child's name is only used
+              internally to match messages to the right child -- it's never shown
+              anywhere a parent would see it.
+            </div>
+            <div id="childRows"></div>
+            <button type="button" class="btn secondary" id="addChildBtn" style="margin-top:4px;">+ Add another child</button>
+          </fieldset>
+
+          <fieldset class="fieldset">
+            <legend>Classification</legend>
+            <div class="hint">Free -- get a key at <a class="link" href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a>, no card needed.</div>
+            <label>Gemini API key</label>
+            <input type="text" name="geminiKey" value="${v("geminiKey")}" required>
+          </fieldset>
+
+          <fieldset class="fieldset">
+            <legend>Approval emails</legend>
+            <div class="hint">Create an App Password at <a class="link" href="https://myaccount.google.com/apppasswords" target="_blank">myaccount.google.com/apppasswords</a> (needs 2-factor authentication on first). This is checked before you continue -- your normal Gmail password won't work here.</div>
+            <label>Your Gmail address</label>
+            <input type="email" name="gmailAddress" value="${v("gmailAddress")}" required>
+            <label>Gmail App Password</label>
+            <input type="text" name="gmailAppPassword" value="${v("gmailAppPassword")}" required>
+            <label>Send approvals to <span class="hint" style="display:inline;">(leave blank to use the address above)</span></label>
+            <input type="email" name="notifyEmail" value="${v("notifyEmail")}">
+          </fieldset>
+
+          <fieldset class="fieldset">
+            <legend>ClassDojo</legend>
+            <div class="hint">Leave blank if you don't use it.</div>
+            <label>Email</label>
+            <input type="email" name="dojoEmail" value="${v("dojoEmail")}">
+            <label>Password</label>
+            <input type="password" name="dojoPassword" value="${v("dojoPassword")}">
+          </fieldset>
+
+          <fieldset class="fieldset">
+            <legend>MyChildAtSchool</legend>
+            <div class="hint">Leave blank if you don't use it.</div>
+            <label>Email</label>
+            <input type="email" name="mcasEmail" value="${v("mcasEmail")}">
+            <label>Password</label>
+            <input type="password" name="mcasPassword" value="${v("mcasPassword")}">
+          </fieldset>
+
+          <button class="btn" type="submit">Save and continue</button>
+        </form>
+      </div>
+
+      <script>
+        const EXISTING_CHILDREN = ${existingChildren};
+        let childIndex = 0;
+
+        function addChildRow(prefill) {
+          const i = childIndex++;
+          const wrap = document.createElement('div');
+          wrap.style.cssText = 'border:1px solid var(--rule); border-radius:6px; padding:14px; margin-bottom:10px;';
+          wrap.innerHTML =
+            '<label>Child\\'s name</label>' +
+            '<input type="text" name="children[' + i + '][name]" placeholder="e.g. Olive" value="' + (prefill?.name || '') + '">' +
+            '<label>Class <span class="hint" style="display:inline;">(this becomes the calendar\\'s name, so use whatever you\\'d want other parents to see)</span></label>' +
+            '<input type="text" name="children[' + i + '][class]" placeholder="e.g. Nightingale Class 26/27" value="' + (prefill?.class || '') + '" required>' +
+            '<button type="button" class="btn secondary" style="margin-top:8px; font-size:12.5px; padding:5px 12px;" onclick="this.parentElement.remove()">Remove this child</button>';
+          document.getElementById('childRows').appendChild(wrap);
+        }
+
+        EXISTING_CHILDREN.forEach(addChildRow);
+        document.getElementById('addChildBtn').addEventListener('click', () => addChildRow());
+      </script>
+    `
+  );
+}
+
+app.get("/details", (req, res) => {
+  res.send(renderDetailsForm());
+});
+
+app.post("/details", async (req, res) => {
   const b = req.body;
+
+  // Check the Gmail App Password actually works before writing it to .env
+  // and moving on -- otherwise this doesn't surface as a problem until a
+  // background run crashes on it later, by which point it's much less
+  // obvious what went wrong.
+  try {
+    const testTransport = nodemailer.createTransport({
+      service: "gmail",
+      auth: { user: b.gmailAddress, pass: b.gmailAppPassword },
+    });
+    await testTransport.verify();
+  } catch (err) {
+    return res.send(
+      renderDetailsForm(
+        b,
+        `Couldn't sign in to Gmail with those details: ${err.message}. ` +
+          `Make sure you're using an App Password (16 letters, no spaces) from ` +
+          `<a class="link" href="https://myaccount.google.com/apppasswords" target="_blank">myaccount.google.com/apppasswords</a>, ` +
+          `not your normal Gmail password.`
+      )
+    );
+  }
+
+  // req.body.children arrives as an array of {name, class} thanks to
+  // express's bracket-notation parsing (children[0][name] etc). Filter out
+  // any fully-empty rows (e.g. if someone clicked "Add" and didn't fill it in).
+  const children = (Array.isArray(b.children) ? b.children : [b.children].filter(Boolean)).filter(
+    (c) => c && c.name && c.name.trim()
+  );
+
+  const missingClass = children.find((c) => !c.class || !c.class.trim());
+  if (missingClass) {
+    return res.send(
+      renderDetailsForm(b, `${missingClass.name} needs a class name -- it's used to name that child's calendar.`)
+    );
+  }
+
+  const householdChildrenLine = children.map((c) => c.name.trim()).join(", ");
+
+  // Actually create (or reuse, if a calendar with that exact name already
+  // exists -- e.g. re-running this wizard to add a second child) a real
+  // calendar for each child, named after their class.
+  let mappedChildren;
+  try {
+    mappedChildren = await Promise.all(
+      children.map(async (c) => ({
+        name: c.name.trim(),
+        class: c.class.trim(),
+        calendarId: await createOrGetCalendarByName(c.class.trim()),
+      }))
+    );
+  } catch (err) {
+    return res.send(
+      renderDetailsForm(b, `Couldn't create a calendar for one of the children: ${err.message}`)
+    );
+  }
+
+  const childCalendarComments = mappedChildren.map((c) => `# ${c.name} -> ${c.class}`).join("\n");
+  const childCalendarsValue = mappedChildren.map((c) => `${c.name}:${c.calendarId}`).join(";");
+
   const env = `# Generated by the School Hub setup wizard on ${new Date().toISOString().slice(0, 10)}
 
-HOUSEHOLD_CHILDREN=${b.children || ""}
+HOUSEHOLD_CHILDREN=${householdChildrenLine}
 
 GEMINI_API_KEY=${b.geminiKey}
 AUTO_ADD_THRESHOLD=80
@@ -255,6 +385,9 @@ AUTO_ADD_THRESHOLD=80
 GOOGLE_CLIENT_ID=${state.googleClientId}
 GOOGLE_CLIENT_SECRET=${state.googleClientSecret}
 GOOGLE_CALENDAR_ID=${state.calendarId}
+
+${childCalendarComments ? childCalendarComments + "\n" : ""}CHILD_CALENDARS=${childCalendarsValue}
+WHOLE_SCHOOL_CALENDAR_ID=
 
 GMAIL_ADDRESS=${b.gmailAddress}
 GMAIL_APP_PASSWORD=${b.gmailAppPassword}
@@ -290,7 +423,7 @@ app.get("/done", (req, res) => {
           <div style="font-size: 13px; font-weight: 700; color: var(--accent); margin-bottom: 4px;">STEP 1 -- DO THIS FIRST</div>
           <p style="margin: 0 0 4px; font-weight: 600;">Run a test check</p>
           <p style="margin: 0 0 14px; font-size: 13.5px; color: var(--slate); line-height: 1.5;">
-            Logs into each school app once, right now, and shows you exactly what happened. This is how you find out if a password was mistyped or a login isn't working -- while you can still see and fix it easily.
+            Logs into each school app once, right now, and shows you exactly what happened -- this is how you find out if a password was mistyped or a login isn't working, while you can still see and fix it easily. It also sends you a test email straight away: if that arrives in your inbox, your email setup is confirmed working.
           </p>
           <form method="POST" action="/run-check">
             <button class="btn" type="submit">Run a test check now</button>
@@ -370,8 +503,41 @@ app.post("/run-install", (req, res) => {
   res.send(runCommandPage("Installing background service...", "npm run install-service"));
 });
 
-app.post("/run-check", (req, res) => {
-  res.send(runCommandPage("Running a test check (this can take up to a few minutes -- checking each app and classifying anything new)...", "npm run run-once"));
+function readEnvValue(key) {
+  if (!fs.existsSync(envPath)) return "";
+  const line = fs
+    .readFileSync(envPath, "utf8")
+    .split("\n")
+    .find((l) => l.startsWith(`${key}=`));
+  return line ? line.slice(key.length + 1).trim() : "";
+}
+
+app.post("/run-check", async (req, res) => {
+  let emailStatus;
+  try {
+    const testTransport = nodemailer.createTransport({
+      service: "gmail",
+      auth: { user: readEnvValue("GMAIL_ADDRESS"), pass: readEnvValue("GMAIL_APP_PASSWORD") },
+    });
+    await testTransport.sendMail({
+      from: readEnvValue("GMAIL_ADDRESS"),
+      to: readEnvValue("NOTIFY_EMAIL") || readEnvValue("GMAIL_ADDRESS"),
+      subject: "School Hub test email",
+      html: `<p>This is a test email from School Hub's setup wizard.</p><p>If you're reading this, your email setup works -- real approval emails will look like this but with an actual event and Approve/Decline links.</p>`,
+    });
+    emailStatus = "✅ Test email sent -- check your inbox.\n\n";
+  } catch (err) {
+    emailStatus = `❌ Test email failed to send: ${err.message}\n\n`;
+  }
+
+  const checkOutput = runCommandPage(
+    "Test check results",
+    "npm run run-once"
+  );
+  // Prepend the guaranteed email-send result to the real check's output,
+  // rather than only hoping the real check happens to trigger an email --
+  // it might not, if there's simply nothing new to review right now.
+  res.send(checkOutput.replace("<pre>", `<pre>${emailStatus}`));
 });
 
 app.listen(PORT, () => {

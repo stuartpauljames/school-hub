@@ -18,6 +18,22 @@ export const config = {
     clientId: required("GOOGLE_CLIENT_ID"),
     clientSecret: required("GOOGLE_CLIENT_SECRET"),
     calendarId: process.env.GOOGLE_CALENDAR_ID || "primary",
+    // Optional multi-calendar routing, for a rep with children in more than
+    // one class: "Name:calendarId;Name:calendarId". If unset, every event
+    // just goes to google.calendarId above, exactly as before.
+    childCalendars: (process.env.CHILD_CALENDARS || "")
+      .split(";")
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+      .reduce((map, entry) => {
+        const [name, calendarId] = entry.split(":").map((s) => s.trim());
+        if (name && calendarId) map[name.toLowerCase()] = calendarId;
+        return map;
+      }, {}),
+    // Where events with no specific child (whole-school trips, inset days)
+    // go, so they don't get duplicated across every mapped child calendar.
+    // Falls back to google.calendarId if not set.
+    wholeSchoolCalendarId: process.env.WHOLE_SCHOOL_CALENDAR_ID || null,
   },
 
   email: {
