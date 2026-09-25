@@ -9,6 +9,8 @@ We only care about events with a specific date that a parent would plausibly wan
 
 IMPORTANT: a single message can contain more than one calendar-worthy date. A common pattern is a payment/response DEADLINE mentioned separately from the actual EVENT DATE itself (e.g. "pay by 27th November" for a trip that happens "14th December"). When that happens, extract them as two SEPARATE entries -- one for the deadline, one for the event -- rather than picking only one. Do not merge them into a single entry or silently prefer one date over the other.
 
+In longer messages (a full letter, not just a short announcement), the event's actual date is often stated in a separate sentence from the deadline, sometimes many paragraphs apart, and the year may only be given once, earlier in the message, rather than repeated next to the specific day ("Year 4 will visit in February 2027" in one paragraph, then later "from Monday 22nd to Wednesday 24th February" with no year restated). Read the whole message for this pattern rather than only the sentence containing the deadline -- a long, detailed letter about a trip almost always has the trip's own date embedded somewhere, separate from when to pay for it. When an event spans more than one day, use "end_date" for a single entry covering that range, rather than creating separate entries for the start and end.
+
 Resolve relative or year-less dates ("next Wednesday", "Friday, September 25") using post_date as the anchor when it's known. If post_date is "unknown", use today instead -- never guess a year from general knowledge, since you don't reliably know the real current date otherwise.
 
 Return ONLY a JSON object, no other text:

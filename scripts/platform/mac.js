@@ -39,7 +39,12 @@ export function installMac(projectRoot) {
   ];
 
   function run(cmd) {
-    return execSync(cmd, { stdio: ["ignore", "pipe", "ignore"] }).toString();
+    try {
+      return execSync(cmd, { stdio: ["ignore", "pipe", "pipe"] }).toString();
+    } catch (err) {
+      const detail = err.stderr?.toString().trim() || err.message;
+      throw new Error(detail);
+    }
   }
 
   console.log("Installing School Hub background services (launchd)...\n");
@@ -68,8 +73,7 @@ export function installMac(projectRoot) {
       console.log(`✅ ${job.label} installed and running`);
     } catch (err) {
       console.log(`❌ ${job.label} failed to install`);
-      console.log(`   Run 'npm run doctor' for diagnostics, or see the error below:`);
-      console.log(`   ${err.message.split("\n")[0]}`);
+      console.log(`   ${err.message}`);
     }
   }
 

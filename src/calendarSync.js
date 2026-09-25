@@ -43,23 +43,47 @@ function toCalendarEventId(itemId) {
 //    simple one-family, one-calendar setup working unchanged.
 function resolveCalendarId(item) {
   const hasMultiCalendarSetup =
-    Object.keys(config.google.childCalendars).length > 0 || config.google.wholeSchoolCalendarId;
+    Object.keys(config.google.childCalendars).length > 0 ||
+    Object.keys(config.google.classCalendars).length > 0 ||
+    Object.keys(config.google.yearGroupCalendars).length > 0 ||
+    config.google.wholeSchoolCalendarId;
 
-  if (!hasMultiCalendarSetup) return config.google.calendarId;
+  if (!hasMultiCalendarSetup) return { calendarId: config.google.calendarId, matchedVia: "default (single-calendar mode)" };
 
   const childKey = item.child_name?.toLowerCase();
   if (childKey && config.google.childCalendars[childKey]) {
-    return config.google.childCalendars[childKey];
+    return { calendarId: config.google.childCalendars[childKey], matchedVia: `child_name="${item.child_name}"` };
   }
 
-  return config.google.wholeSchoolCalendarId || config.google.calendarId;
+  const classKey = item.class_name?.toLowerCase().trim();
+  if (classKey) {
+    for (const [configuredClass, calendarId] of Object.entries(config.google.classCalendars)) {
+      if (classKey.includes(configuredClass) || configuredClass.includes(classKey)) {
+        return { calendarId, matchedVia: `class_name="${item.class_name}" matched "${configuredClass}"` };
+      }
+    }
+  }
+
+  // Fall back to year group ("Year 4") when class name didn't match or
+  // wasn't extracted -- MCAS messages especially tend to say the year
+  // group rather than a class's actual name.
+  const yearKey = item.year_group?.toLowerCase().trim();
+  if (yearKey && config.google.yearGroupCalendars[yearKey]) {
+    return { calendarId: config.google.yearGroupCalendars[yearKey], matchedVia: `year_group="${item.year_group}"` };
+  }
+
+  return {
+    calendarId: config.google.wholeSchoolCalendarId || config.google.calendarId,
+    matchedVia: `no match (child_name="${item.child_name || "none"}", class_name="${item.class_name || "none"}", year_group="${item.year_group || "none"}")`,
+  };
 }
 
 export async function upsertCalendarEvent(item) {
   const auth = getAuthedClient();
   const calendar = google.calendar({ version: "v3", auth });
   const eventId = toCalendarEventId(item.id);
-  const calendarId = resolveCalendarId(item);
+  const { calendarId, matchedVia } = resolveCalendarId(item);
+  console.log(`[calendarSync] Routing "${item.summary}" -> ${calendarId} (${matchedVia})`);
 
   const eventBody = {
     summary: `${item.category ? `[${item.category}] ` : ""}${item.summary}`,

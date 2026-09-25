@@ -43,16 +43,23 @@ wizard (`npm run configure`) now handles this automatically:
 
 1. When you get to "Create a whole-school calendar," name it something
    like "Whole School Events" -- School Hub creates it for you.
-2. On the next page, add each child one at a time with their name and
-   their class. **The class name becomes that calendar's actual title**,
-   so use whatever you'd want other parents in that class to see (e.g.
-   "Nightingale Class 26/27 dates"). School Hub creates a dedicated
-   calendar for each one automatically -- for two children in different
-   classes, that's 3 calendars in total: one whole-school, one per class.
-3. An event gets routed to a child's calendar only when the message
-   clearly names that child. A whole-school trip or inset day, which
-   doesn't name a specific child, goes to the whole-school calendar
-   instead -- so it shows up once, not duplicated in every class calendar.
+2. On the next page, add each child one at a time with their name, their
+   class, and (optionally) their year group. **The class name becomes that
+   calendar's actual title**, so use whatever you'd want other parents in
+   that class to see (e.g. "Nightingale Class 26/27 dates"). School Hub
+   creates a dedicated calendar for each one automatically -- for two
+   children in different classes, that's 3 calendars in total: one
+   whole-school, one per class.
+3. Each event is matched in this order: first by whether the message names
+   a specific child, then by whether it names the class (e.g. "Nightingale
+   Class parents"), then by year group if you filled that in (e.g. "Year
+   4" -- this is the one worth filling in, since MyChildAtSchool
+   particularly tends to say the year group rather than the class's actual
+   name). Anything matching none of those -- a genuine whole-school trip or
+   inset day -- goes to the whole-school calendar instead. Every run logs
+   which of these actually matched for each event (`data/scraper.log`,
+   lines starting `[calendarSync] Routing`), worth checking if something
+   ever lands somewhere you didn't expect.
 4. Share each calendar separately with the parents in that specific class,
    following Part 2 below for each one.
 
@@ -119,6 +126,7 @@ still worth keeping for anything urgent.
 | `invalid_grant` | The Google connection expired (usually because the app wasn't published) | Publish the Google app, delete `data/google-token.json`, reconnect via `npm run configure` |
 | A ClassDojo or MyChildAtSchool login failure | Password changed, or the site changed its design | Update `.env`. If the password's right and it's still failing, the site's probably changed and the connector needs updating |
 | No new lines for hours | The PC is off or asleep | Nothing is lost -- it catches up at the next run |
+| An event landed on the wrong calendar | Every event's routing decision is logged | Search `data/scraper.log` for `[calendarSync] Routing` and that event's title -- it states exactly which rule matched (or didn't) |
 
 - **Handing over.** When you stop running it, run
   `npm run uninstall-service`, then transfer ownership of the shared

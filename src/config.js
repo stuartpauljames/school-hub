@@ -30,6 +30,30 @@ export const config = {
         if (name && calendarId) map[name.toLowerCase()] = calendarId;
         return map;
       }, {}),
+    // Same idea, but keyed by class name -- many school messages name the
+    // class directly ("Nightingale Class parents", "Goldfinch's Kench Hill
+    // trip") without ever naming a specific child.
+    classCalendars: (process.env.CLASS_CALENDARS || "")
+      .split(";")
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+      .reduce((map, entry) => {
+        const [name, calendarId] = entry.split(":").map((s) => s.trim());
+        if (name && calendarId) map[name.toLowerCase()] = calendarId;
+        return map;
+      }, {}),
+    // Same idea again, but keyed by year group ("Year 4"). MCAS messages in
+    // particular often say "Year 4" rather than the class's actual name, so
+    // class_name alone misses these even when class routing is configured.
+    yearGroupCalendars: (process.env.YEAR_GROUP_CALENDARS || "")
+      .split(";")
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+      .reduce((map, entry) => {
+        const [name, calendarId] = entry.split(":").map((s) => s.trim());
+        if (name && calendarId) map[name.toLowerCase()] = calendarId;
+        return map;
+      }, {}),
     // Where events with no specific child (whole-school trips, inset days)
     // go, so they don't get duplicated across every mapped child calendar.
     // Falls back to google.calendarId if not set.

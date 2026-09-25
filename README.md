@@ -237,11 +237,18 @@ fine, you can lower it.
 
 ## Other things worth knowing
 
-- **`CHILD_CALENDARS` and `WHOLE_SCHOOL_CALENDAR_ID`** (both optional) let
-  events route to a separate calendar per child, with whole-school events
-  kept in their own calendar rather than duplicated everywhere. See
-  `CLASS_REP_GUIDE.md` for the full setup -- most single-family setups can
-  ignore this entirely and just use `GOOGLE_CALENDAR_ID` as before.
+- **Multi-calendar routing** (optional, most single-family setups can
+  ignore this and just use `GOOGLE_CALENDAR_ID`): events can route to a
+  separate calendar per child (`CHILD_CALENDARS`), per class
+  (`CLASS_CALENDARS`, for messages that name the class but not a specific
+  child), or per year group (`YEAR_GROUP_CALENDARS`, for messages -- common
+  on MyChildAtSchool -- that say "Year 4" rather than the class's actual
+  name), with `WHOLE_SCHOOL_CALENDAR_ID` catching anything that matches
+  none of those. The wizard sets all of this up automatically if you fill
+  in each child's class and year group; see `CLASS_REP_GUIDE.md` for the
+  full picture. Every run logs exactly which rule matched (or didn't) for
+  each event -- look for `[calendarSync] Routing "..."` lines in
+  `data/scraper.log` if something lands somewhere unexpected.
 
 - **`HOUSEHOLD_CHILDREN`** in `.env` (a comma-separated list of names) is
   passed to the classifier as context, so it can attribute a ClassDojo or
