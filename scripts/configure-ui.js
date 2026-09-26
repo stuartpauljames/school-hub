@@ -34,6 +34,11 @@ const state = {
 const app = express();
 app.use(express.urlencoded({ extended: true }));
 
+app.get("/favicon.svg", (req, res) => {
+  res.type("image/svg+xml");
+  res.sendFile(path.join(projectRoot, "favicon.svg"));
+});
+
 function getAuthedCalendarClient() {
   const client = new google.auth.OAuth2(state.googleClientId, state.googleClientSecret, REDIRECT_URI);
   client.setCredentials(JSON.parse(fs.readFileSync(tokenPath, "utf8")));
@@ -80,7 +85,7 @@ const STYLE = `
 `;
 
 function layout(title, step, body) {
-  return `<html><head><title>School Hub setup</title><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2032%2032%22%3E%0A%20%20%3Crect%20width%3D%2232%22%20height%3D%2232%22%20rx%3D%227%22%20fill%3D%22%231b2a4a%22%2F%3E%0A%20%20%3Crect%20x%3D%2210%22%20y%3D%225%22%20width%3D%222%22%20height%3D%226%22%20rx%3D%221%22%20fill%3D%22%23faf7f0%22%2F%3E%0A%20%20%3Crect%20x%3D%2220%22%20y%3D%225%22%20width%3D%222%22%20height%3D%226%22%20rx%3D%221%22%20fill%3D%22%23faf7f0%22%2F%3E%0A%20%20%3Crect%20x%3D%227%22%20y%3D%229%22%20width%3D%2218%22%20height%3D%2216%22%20rx%3D%222%22%20fill%3D%22%23faf7f0%22%2F%3E%0A%20%20%3Crect%20x%3D%227%22%20y%3D%229%22%20width%3D%2218%22%20height%3D%225%22%20rx%3D%222%22%20fill%3D%22%23ffffff%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%2211.5%22%20cy%3D%2218.5%22%20r%3D%221.7%22%20fill%3D%22%233f51b5%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%2216%22%20cy%3D%2218.5%22%20r%3D%221.7%22%20fill%3D%22%23d60000%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%2220.5%22%20cy%3D%2218.5%22%20r%3D%221.7%22%20fill%3D%22%230b8043%22%2F%3E%0A%20%20%3Crect%20x%3D%2210%22%20y%3D%2221.8%22%20width%3D%2212%22%20height%3D%221.6%22%20rx%3D%220.8%22%20fill%3D%22%23d8d2c4%22%2F%3E%0A%3C%2Fsvg%3E"><style>${STYLE}</style></head>
+  return `<html><head><title>School Hub setup</title><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="icon" type="image/svg+xml" href="/favicon.svg"><style>${STYLE}</style></head>
   <body><div class="wrap">
     ${step ? `<div class="step">${step}</div>` : ""}
     <h1>${title}</h1>
@@ -184,18 +189,18 @@ app.get("/oauth2callback", async (req, res) => {
   }
 });
 
-// ---------- Step 2: name the whole-school calendar ----------
+// ---------- Step 2: name the general (catch-all) calendar ----------
 app.get("/calendar", async (req, res) => {
   res.send(
     layout(
-      "Create a whole-school calendar",
+      "Create a general school calendar",
       "Step 1 of 3 -- almost done",
       `
       <div class="card">
-        <p class="lead">Google connected. School Hub will create a dedicated calendar for events that don't belong to one specific child -- whole-school trips, inset days, and so on. This keeps school events separate from your own personal calendar entirely.</p>
+        <p class="lead">Google connected. School Hub will create a dedicated calendar for anything that isn't matched to one specific child's class or year group -- genuine whole-school events, but also anything ambiguous or from a class you haven't set up separately. This keeps school events separate from your own personal calendar entirely.</p>
         <form method="POST" action="/calendar">
           <label>Calendar name</label>
-          <input type="text" name="calendarName" placeholder="e.g. Whole School Events" required>
+          <input type="text" name="calendarName" placeholder="e.g. General School Events" required>
           <button class="btn" type="submit">Create and continue</button>
         </form>
       </div>

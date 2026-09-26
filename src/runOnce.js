@@ -1,5 +1,5 @@
 import { config } from "./config.js";
-import { hashItem, isSeen, markSeen, addPending, logAdded } from "./store.js";
+import { hashItem, isSeen, markSeen, addPending, logAdded, findCrossSourceDuplicate } from "./store.js";
 import { classifyItem } from "./classify.js";
 import { upsertCalendarEvent } from "./calendarSync.js";
 import { sendApprovalEmail } from "./notify.js";
@@ -85,6 +85,17 @@ async function main() {
         original_text: raw.text,
         ...event,
       };
+
+      const duplicate = findCrossSourceDuplicate(item);
+      if (duplicate) {
+        // Same real-world event, reported by a different app -- e.g.
+        // ClassDojo and MyChildAtSchool both posting about the same trip.
+        // Not a failure, just nothing further to do with this one.
+        console.log(
+          `[runOnce] Skipping "${item.summary}" -- looks like a duplicate of a ${duplicate.source} item already known ("${duplicate.summary}")`
+        );
+        continue;
+      }
 
       try {
         if (event.confidence >= config.autoAddThreshold) {

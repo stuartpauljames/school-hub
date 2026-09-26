@@ -1,9 +1,21 @@
 import express from "express";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 import { config } from "./config.js";
 import { getPending, resolvePending, logAdded } from "./store.js";
 import { upsertCalendarEvent } from "./calendarSync.js";
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
+
+// Served as a real file at a real route rather than an inline data: URI --
+// Safari in particular has unreliable support for SVG favicons embedded as
+// data URIs, but handles an actual served file normally.
+app.get("/favicon.svg", (req, res) => {
+  res.type("image/svg+xml");
+  res.sendFile(path.join(__dirname, "..", "favicon.svg"));
+});
 
 const CATEGORY_COLORS = {
   trip: "#3f51b5",
@@ -106,7 +118,7 @@ function layout(bodyHtml, title = "School Hub") {
     <head>
       <title>${title}</title>
       <meta name="viewport" content="width=device-width, initial-scale=1" />
-      <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2032%2032%22%3E%0A%20%20%3Crect%20width%3D%2232%22%20height%3D%2232%22%20rx%3D%227%22%20fill%3D%22%231b2a4a%22%2F%3E%0A%20%20%3Crect%20x%3D%2210%22%20y%3D%225%22%20width%3D%222%22%20height%3D%226%22%20rx%3D%221%22%20fill%3D%22%23faf7f0%22%2F%3E%0A%20%20%3Crect%20x%3D%2220%22%20y%3D%225%22%20width%3D%222%22%20height%3D%226%22%20rx%3D%221%22%20fill%3D%22%23faf7f0%22%2F%3E%0A%20%20%3Crect%20x%3D%227%22%20y%3D%229%22%20width%3D%2218%22%20height%3D%2216%22%20rx%3D%222%22%20fill%3D%22%23faf7f0%22%2F%3E%0A%20%20%3Crect%20x%3D%227%22%20y%3D%229%22%20width%3D%2218%22%20height%3D%225%22%20rx%3D%222%22%20fill%3D%22%23ffffff%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%2211.5%22%20cy%3D%2218.5%22%20r%3D%221.7%22%20fill%3D%22%233f51b5%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%2216%22%20cy%3D%2218.5%22%20r%3D%221.7%22%20fill%3D%22%23d60000%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%2220.5%22%20cy%3D%2218.5%22%20r%3D%221.7%22%20fill%3D%22%230b8043%22%2F%3E%0A%20%20%3Crect%20x%3D%2210%22%20y%3D%2221.8%22%20width%3D%2212%22%20height%3D%221.6%22%20rx%3D%220.8%22%20fill%3D%22%23d8d2c4%22%2F%3E%0A%3C%2Fsvg%3E" />
+      <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
       <style>${STYLE}</style>
     </head>
     <body><div class="wrap">${bodyHtml}</div></body>

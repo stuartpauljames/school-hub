@@ -52,23 +52,51 @@ function parseTimelineTime(timeText) {
   };
 }
 
-async function scrapeOnce() {
-  const browser = await chromium.launch({ headless: true });
-  const context = await getContext(browser);
-  const page = await context.newPage();
+// Some MCAS accounts (more than one child at the school) show a child
+// switcher in the sidebar; single-child accounts don't. Returns [] when
+// there's nothing to switch between, so that case is handled identically
+// to before this existed.
+async function getAvailableChildren(page) {
+  const hasSelector = await page.locator("#StudentSelectorContainer").count();
+  if (!hasSelector) return [];
 
-  const loggedIn = await page
-    .goto("https://www.mychildatschool.com/Dashboard")
-    .then(() => page.locator(".timeline-body").first().isVisible({ timeout: 8000 }))
-    .catch(() => false);
+  return page.$$eval('#StudentSelectorContainer li[data-studentid]', (nodes) =>
+    nodes.map((li) => {
+      const rawName = li.querySelector(".student-selector-stname")?.textContent?.trim() || "";
+      // MCAS displays "Lastname, Firstname" -- take the part after the comma.
+      const firstName = rawName.includes(",") ? rawName.split(",")[1].trim() : rawName;
+      return {
+        name: firstName,
+        studentId: li.getAttribute("data-studentid"),
+        schoolId: li.getAttribute("data-schoolid"),
+      };
+    })
+  );
+}
 
-  if (!loggedIn) {
-    await login(page);
-    await context.storageState({ path: SESSION_PATH });
-  }
-
+// Calls the page's own onClickStudentDropdownItem(schoolId, studentId, true)
+// function directly (the same one each dropdown row's onclick uses) rather
+// than simulating a click through the dropdown UI -- more reliable than
+// fighting the dropdown's open/close animation and exact click coordinates.
+// Confirmed this triggers a real page reload (a few seconds), not just an
+// in-place AJAX update, so we wait for an actual navigation event.
+async function switchToStudent(page, { studentId, schoolId }) {
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: "networkidle", timeout: 15000 }).catch(() => {}),
+    page.evaluate(
+      ({ schoolId, studentId }) => {
+        // eslint-disable-next-line no-undef -- defined by MCAS's own page script
+        onClickStudentDropdownItem(schoolId, studentId, true);
+      },
+      { schoolId, studentId }
+    ),
+  ]);
+  // Belt-and-braces in case the reload is sometimes an AJAX update instead.
   await page.waitForLoadState("networkidle").catch(() => {});
+  await page.waitForTimeout(1000);
+}
 
+async function scrapeCurrentTimeline(page) {
   const elementCount = await page.locator(".timeline-body").count();
   console.log(`[mcas] Found ${elementCount} .timeline-body elements on the page`);
 
@@ -89,20 +117,88 @@ async function scrapeOnce() {
     })
   );
 
-  await browser.close();
-
   return announcements
     .filter((a) => a.body || a.title)
     .map((a) => {
       const { school, date } = parseTimelineTime(a.timeText);
       return {
-        source: "MyChildAtSchool",
         poster: school,
-        classContext: null,
         postDate: date,
         text: `${a.title}\n${a.body}`.trim(),
       };
     });
+}
+
+// Anything seen under more than one child's timeline is genuinely
+// whole-school content (both children's accounts show it), so it gets
+// tagged with no specific child rather than being duplicated once per
+// child. Matched by exact text, since a shared announcement renders
+// identically regardless of which child's timeline you're viewing it from.
+function reconcileAcrossChildren(perChildResults) {
+  const seenByChild = new Map(); // raw item text -> Set of child names (or [null] for a no-switcher single scrape)
+  const itemByText = new Map();
+
+  for (const { childName, items } of perChildResults) {
+    for (const item of items) {
+      if (!seenByChild.has(item.text)) seenByChild.set(item.text, new Set());
+      seenByChild.get(item.text).add(childName);
+      itemByText.set(item.text, item);
+    }
+  }
+
+  const results = [];
+  for (const [text, childrenSet] of seenByChild) {
+    const item = itemByText.get(text);
+    const seenByMultipleChildren = childrenSet.size > 1;
+    results.push({
+      source: "MyChildAtSchool",
+      poster: item.poster,
+      classContext: null,
+      childName: seenByMultipleChildren ? null : [...childrenSet][0],
+      postDate: item.postDate,
+      text,
+    });
+  }
+  return results;
+}
+
+async function scrapeOnce() {
+  const browser = await chromium.launch({ headless: true });
+  const context = await getContext(browser);
+  const page = await context.newPage();
+
+  const loggedIn = await page
+    .goto("https://www.mychildatschool.com/Dashboard")
+    .then(() => page.locator(".timeline-body").first().isVisible({ timeout: 8000 }))
+    .catch(() => false);
+
+  if (!loggedIn) {
+    await login(page);
+    await context.storageState({ path: SESSION_PATH });
+  }
+
+  await page.waitForLoadState("networkidle").catch(() => {});
+
+  const children = await getAvailableChildren(page);
+  const perChildResults = [];
+
+  if (children.length === 0) {
+    // No switcher present -- single-child account, scrape once as before.
+    const items = await scrapeCurrentTimeline(page);
+    perChildResults.push({ childName: null, items });
+  } else {
+    console.log(`[mcas] Found child switcher: ${children.map((c) => c.name).join(", ")}`);
+    for (const child of children) {
+      await switchToStudent(page, child);
+      const items = await scrapeCurrentTimeline(page);
+      console.log(`[mcas]   ${child.name}: ${items.length} items`);
+      perChildResults.push({ childName: child.name, items });
+    }
+  }
+
+  await browser.close();
+
+  return reconcileAcrossChildren(perChildResults);
 }
 
 export async function fetchMcasItems() {

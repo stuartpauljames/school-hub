@@ -90,6 +90,10 @@ This checks the most common problems and tells you plainly what to fix.
   check on their site. If you want it, see `README.md` for how to add it
   by hand afterward.
 
+If you have more than one child at the same school on MyChildAtSchool,
+School Hub finds and checks each of them automatically — nothing to set
+up for that specifically.
+
 ## Windows: now genuinely tested
 
 A real parent ran this end to end on Windows 11 -- logged into ClassDojo

@@ -24,7 +24,7 @@ so these things need deciding first:
 
 | Question | Why it matters | Recommendation |
 | --- | --- | --- |
-| Do you have children in more than one year group, or at another school? | Used to mean events from every class landed in one calendar. As of this version, School Hub can route each child's events to their own separate calendar (`CHILD_CALENDARS` in `.env`), with whole-school events kept in their own calendar too so they aren't duplicated. If you set this up, you can be the rep for more than one class at once | See "Running as rep for more than one class" below |
+| Do you have children in more than one year group, or at another school? | Used to mean events from every class landed in one calendar. As of this version, School Hub can route each child's events to their own separate calendar (`CHILD_CALENDARS` in `.env`), with anything unmatched kept in its own general calendar too so it isn't duplicated. If you set this up, you can be the rep for more than one class at once | See "Running as rep for more than one class" below |
 | Could personal items get through? | MyChildAtSchool carries messages about *your* child specifically: payments due, individual notes, medical letters. These can be classified as events and auto-added | Set `AUTO_ADD_THRESHOLD=101` in `.env`. Nothing gets added automatically any more -- every event comes to you by email first, and you tap Add or Decline |
 | What goes into each event? | Each event's description holds **the full text of the original post**, including teachers' names and anything else it mentions | Read a few events in full before sharing. If posts routinely name children, that's worth knowing before the calendar goes out |
 | Is the school happy with it? | You'd be sharing school communications with parents outside the platform they were sent through | Worth a quick check with the school office or head first: "I'd like to share a read-only calendar of year-group dates taken from ClassDojo, is that OK?" |
@@ -41,32 +41,36 @@ calendar.
 If you have children in different classes or year groups, the setup
 wizard (`npm run configure`) now handles this automatically:
 
-1. When you get to "Create a whole-school calendar," name it something
-   like "Whole School Events" -- School Hub creates it for you.
+1. When you get to "Create a general school calendar," name it something
+   like "General School Events" -- School Hub creates it for you. This
+   holds anything that doesn't match a specific child's class or year
+   group -- genuine whole-school announcements, but also anything
+   ambiguous or from a class you haven't set up separately, so it's worth
+   thinking of as a catch-all rather than strictly "things that apply to
+   every pupil."
 2. On the next page, add each child one at a time with their name, their
    class, and (optionally) their year group. **The class name becomes that
    calendar's actual title**, so use whatever you'd want other parents in
    that class to see (e.g. "Nightingale Class 26/27 dates"). School Hub
    creates a dedicated calendar for each one automatically -- for two
    children in different classes, that's 3 calendars in total: one
-   whole-school, one per class.
+   general, one per class.
 3. Each event is matched in this order: first by whether the message names
    a specific child, then by whether it names the class (e.g. "Nightingale
    Class parents"), then by year group if you filled that in (e.g. "Year
    4" -- this is the one worth filling in, since MyChildAtSchool
    particularly tends to say the year group rather than the class's actual
-   name). Anything matching none of those -- a genuine whole-school trip or
-   inset day -- goes to the whole-school calendar instead. Every run logs
-   which of these actually matched for each event (`data/scraper.log`,
-   lines starting `[calendarSync] Routing`), worth checking if something
-   ever lands somewhere you didn't expect.
+   name). Anything matching none of those goes to the general calendar
+   instead. Every run logs which of these actually matched for each event
+   (`data/scraper.log`, lines starting `[calendarSync] Routing`), worth
+   checking if something ever lands somewhere you didn't expect.
 4. Share each calendar separately with the parents in that specific class,
    following Part 2 below for each one.
 
 If you only have one child, or don't need separate calendars, just add
 that one child in the wizard as normal -- you'll end up with two
-calendars (whole-school and their class), which is still useful for
-keeping school events out of your personal calendar even without sharing
+calendars (general and their class), which is still useful for keeping
+school events out of your personal calendar even without sharing
 anything.
 
 Re-running the wizard later (e.g. to add a second child) won't create

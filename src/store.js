@@ -63,3 +63,49 @@ export function logAdded(item) {
   log.push({ ...item, addedAt: new Date().toISOString() });
   writeJson(LOG_PATH, log);
 }
+
+// Reduces text to its meaningful words for comparison -- short/common words
+// ("the", "for", "and") are dropped since they'd inflate similarity between
+// genuinely unrelated events that just share ordinary sentence structure.
+function significantWords(text) {
+  return new Set(
+    (text || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9\s£]/g, " ")
+      .split(/\s+/)
+      .filter((w) => w.length > 3)
+  );
+}
+
+function jaccardSimilarity(setA, setB) {
+  if (setA.size === 0 || setB.size === 0) return 0;
+  const intersection = [...setA].filter((w) => setB.has(w)).length;
+  const union = new Set([...setA, ...setB]).size;
+  return intersection / union;
+}
+
+const DUPLICATE_SIMILARITY_THRESHOLD = 0.4;
+
+// Same real-world event reported by two different apps (e.g. ClassDojo and
+// MyChildAtSchool both posting about the same trip) will never share exact
+// wording, so this compares by date + how much meaningful vocabulary
+// overlaps between summaries, rather than exact text matching. Checks both
+// already-added events and anything currently sitting in someone's
+// approval inbox, so two low-confidence duplicates queued in the same run
+// don't both get emailed either.
+export function findCrossSourceDuplicate(item) {
+  const added = readJson(LOG_PATH, []);
+  const pending = Object.values(readJson(PENDING_PATH, {}));
+  const candidates = [...added, ...pending].filter(
+    (c) => c.date === item.date && c.source !== item.source
+  );
+
+  const itemWords = significantWords(item.summary);
+  for (const candidate of candidates) {
+    const similarity = jaccardSimilarity(itemWords, significantWords(candidate.summary));
+    if (similarity >= DUPLICATE_SIMILARITY_THRESHOLD) {
+      return candidate;
+    }
+  }
+  return null;
+}

@@ -254,6 +254,15 @@ fine, you can lower it.
   passed to the classifier as context, so it can attribute a ClassDojo or
   MyChildAtSchool message to the right child by name when one is mentioned,
   rather than only ever guessing from the message text alone.
+- **If your MyChildAtSchool account has more than one child**, the
+  connector detects the child switcher in the sidebar automatically and
+  checks each child's timeline separately -- no configuration needed. This
+  gives genuinely reliable per-child attribution (like Class Charts
+  already has via its own per-child login), rather than depending on a
+  message happening to mention a name. Anything appearing under more than
+  one child is correctly recognized as whole-school rather than
+  duplicated. Look for `[mcas] Found child switcher: ...` in the logs to
+  confirm this is active for your account.
 - **Classification calls to Gemini have a 30-second timeout**, and the
   `configure` wizard's test-check button has a 3-minute timeout on the
   whole run -- both fail cleanly and skip/retry rather than hanging
@@ -261,3 +270,9 @@ fine, you can lower it.
 - **A failed classification (rate limit, timeout, API error) is retried
   automatically on the next run** rather than being silently dropped --
   it's only marked "seen" once it's actually been classified successfully.
+- **The same real event reported by two different apps** (a trip announced
+  on both ClassDojo and MyChildAtSchool, say) is detected and only added
+  once, by comparing date plus how much meaningful vocabulary overlaps
+  between the two summaries -- exact wording will always differ between
+  apps, so this doesn't require an exact match. Look for
+  `[runOnce] Skipping "..."` in the logs to see this catch something.
