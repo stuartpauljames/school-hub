@@ -167,53 +167,58 @@ function reconcileAcrossChildren(perChildResults) {
 
 async function scrapeOnce() {
   const browser = await chromium.launch({ headless: true });
-  const context = await getContext(browser);
-  const page = await context.newPage();
+  try {
+    const context = await getContext(browser);
+    const page = await context.newPage();
 
-  const loggedIn = await page
-    .goto("https://www.mychildatschool.com/Dashboard")
-    .then(() => page.locator(".timeline-body").first().isVisible({ timeout: 8000 }))
-    .catch(() => false);
+    const loggedIn = await page
+      .goto("https://www.mychildatschool.com/Dashboard")
+      .then(() => page.locator(".timeline-body").first().isVisible({ timeout: 8000 }))
+      .catch(() => false);
 
-  if (!loggedIn) {
-    await login(page);
-    await context.storageState({ path: SESSION_PATH });
-  }
-
-  await page.waitForLoadState("networkidle").catch(() => {});
-
-  const children = await getAvailableChildren(page);
-  const perChildResults = [];
-
-  if (children.length === 0) {
-    // No switcher present -- single-child account, scrape once as before.
-    const items = await scrapeCurrentTimeline(page);
-    perChildResults.push({ childName: null, items });
-  } else {
-    console.log(`[mcas] Found child switcher: ${children.map((c) => c.name).join(", ")}`);
-    for (const child of children) {
-      await switchToStudent(page, child);
-      let items = await scrapeCurrentTimeline(page);
-
-      if (items.length === 0) {
-        // A genuine zero seems unlikely if a sibling's timeline has content
-        // (whole-school posts should appear for both) -- more likely the
-        // panel just hadn't finished loading yet. Give it one more real
-        // chance before accepting zero as the actual answer.
-        console.warn(`[mcas]   ${child.name}: 0 items, waiting and retrying once before accepting that...`);
-        await page.waitForTimeout(3000);
-        await page.waitForSelector(".timeline-body", { timeout: 8000 }).catch(() => {});
-        items = await scrapeCurrentTimeline(page);
-      }
-
-      console.log(`[mcas]   ${child.name}: ${items.length} items`);
-      perChildResults.push({ childName: child.name, items });
+    if (!loggedIn) {
+      await login(page);
+      await context.storageState({ path: SESSION_PATH });
     }
+
+    await page.waitForLoadState("networkidle").catch(() => {});
+
+    const children = await getAvailableChildren(page);
+    const perChildResults = [];
+
+    if (children.length === 0) {
+      // No switcher present -- single-child account, scrape once as before.
+      const items = await scrapeCurrentTimeline(page);
+      perChildResults.push({ childName: null, items });
+    } else {
+      console.log(`[mcas] Found child switcher: ${children.map((c) => c.name).join(", ")}`);
+      for (const child of children) {
+        await switchToStudent(page, child);
+        let items = await scrapeCurrentTimeline(page);
+
+        if (items.length === 0) {
+          // A genuine zero seems unlikely if a sibling's timeline has content
+          // (whole-school posts should appear for both) -- more likely the
+          // panel just hadn't finished loading yet. Give it one more real
+          // chance before accepting zero as the actual answer.
+          console.warn(`[mcas]   ${child.name}: 0 items, waiting and retrying once before accepting that...`);
+          await page.waitForTimeout(3000);
+          await page.waitForSelector(".timeline-body", { timeout: 8000 }).catch(() => {});
+          items = await scrapeCurrentTimeline(page);
+        }
+
+        console.log(`[mcas]   ${child.name}: ${items.length} items`);
+        perChildResults.push({ childName: child.name, items });
+      }
+    }
+
+    return reconcileAcrossChildren(perChildResults);
+  } finally {
+    // Always close the browser, even if something above threw -- otherwise a
+    // failed attempt leaves a headless Chromium running, which can stop the
+    // whole process from ever exiting.
+    await browser.close().catch(() => {});
   }
-
-  await browser.close();
-
-  return reconcileAcrossChildren(perChildResults);
 }
 
 export async function fetchMcasItems() {

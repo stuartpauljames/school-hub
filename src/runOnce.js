@@ -1,11 +1,15 @@
 import { config } from "./config.js";
-import { hashItem, isSeen, markSeen, addPending, logAdded, findCrossSourceDuplicate } from "./store.js";
+import { hashItem, isSeen, markSeen, addPending, logAdded, findDuplicate } from "./store.js";
 import { classifyItem } from "./classify.js";
 import { upsertCalendarEvent } from "./calendarSync.js";
 import { sendApprovalEmail } from "./notify.js";
 import { fetchClassChartsItems } from "./connectors/classCharts.js";
 import { fetchClassDojoItems } from "./connectors/classDojo.js";
 import { fetchMcasItems } from "./connectors/mcas.js";
+
+function datesLabel(item) {
+  return item.end_date && item.end_date !== item.date ? `${item.date} to ${item.end_date}` : item.date;
+}
 
 async function fetchAllRawItems() {
   const labeled = [
@@ -45,7 +49,9 @@ async function main() {
   let newCount = 0;
 
   for (const raw of rawItems) {
-    const rawId = hashItem(raw.source, raw.text);
+    // Items that carry their own stable identity (ClassDojo calendar events,
+    // keyed by ClassDojo's event id) use that instead of their text.
+    const rawId = hashItem(raw.source, raw.dedupeKey || raw.text);
     if (isSeen(rawId)) continue;
     newCount++;
 
@@ -76,23 +82,32 @@ async function main() {
       // id, derived from the specific date + summary, not just the raw
       // message, so they don't collide with each other or with a
       // single-event message's id.
-      const eventId = hashItem(raw.source, `${raw.text}::${event.date}::${event.summary}`);
+      // Calendar-event cards derive their id from ClassDojo's event id and the
+      // date only -- NOT the AI's summary wording, which can vary between
+      // runs and would otherwise turn a re-read of the same event into a
+      // second calendar entry.
+      const eventId = raw.dedupeKey
+        ? hashItem(raw.source, `${raw.dedupeKey}::${event.date}`)
+        : hashItem(raw.source, `${raw.text}::${event.date}::${event.summary}`);
 
       const item = {
         id: eventId,
         source: raw.source,
         poster: raw.poster,
         original_text: raw.text,
+        kind: raw.kind,
+        eventTitle: raw.eventTitle,
         ...event,
       };
 
-      const duplicate = findCrossSourceDuplicate(item);
+      const duplicate = findDuplicate(item);
       if (duplicate) {
-        // Same real-world event, reported by a different app -- e.g.
-        // ClassDojo and MyChildAtSchool both posting about the same trip.
-        // Not a failure, just nothing further to do with this one.
+        // Same real-world event reported twice -- by a different app (e.g.
+        // ClassDojo and MyChildAtSchool both posting about the same trip),
+        // or by ClassDojo as both a calendar-event card and an ordinary
+        // post. Not a failure, just nothing further to do with this one.
         console.log(
-          `[runOnce] Skipping "${item.summary}" -- looks like a duplicate of a ${duplicate.source} item already known ("${duplicate.summary}")`
+          `[runOnce] Skipping "${item.summary}" -- looks like a duplicate of an item already known (${duplicate.source}: "${duplicate.summary}")`
         );
         continue;
       }
@@ -101,11 +116,11 @@ async function main() {
         if (event.confidence >= config.autoAddThreshold) {
           const sync = await upsertCalendarEvent(item);
           logAdded({ ...item, syncAction: sync.action, calendarId: sync.calendarId });
-          console.log(`[runOnce] Auto-added (${event.confidence}%) to ${sync.calendarId}: ${item.summary}`);
+          console.log(`[runOnce] Auto-added (${event.confidence}%) to ${sync.calendarId}: ${item.summary} [${datesLabel(item)}]`);
         } else {
           addPending(item);
           await sendApprovalEmail(item);
-          console.log(`[runOnce] Sent for approval (${event.confidence}%): ${item.summary}`);
+          console.log(`[runOnce] Sent for approval (${event.confidence}%): ${item.summary} [${datesLabel(item)}]`);
         }
       } catch (err) {
         // A failure here (e.g. an expired Google token, or a bad Gmail App
@@ -132,7 +147,29 @@ async function main() {
   console.log(`[runOnce] Done. ${newCount} new items processed.`);
 }
 
-main().catch((err) => {
-  console.error("[runOnce] Fatal error:", err);
+// Two safety nets so a stuck run can never block the scheduled ones (the
+// scheduler won't start a new run while the previous one is still going):
+//  1. Exit explicitly once finished, rather than waiting for the event loop
+//     to empty -- a stray open handle (e.g. a browser that failed to close)
+//     would otherwise keep the process alive forever after "Done".
+//  2. A watchdog that gives up on a run that takes far too long. Anything
+//     already saved stays saved, and anything not yet marked as seen is
+//     simply retried on the next run.
+const MAX_RUN_MS = 20 * 60 * 1000;
+setTimeout(() => {
+  console.error("[runOnce] Run exceeded 20 minutes -- exiting so the next scheduled run isn't blocked.");
   process.exit(1);
-});
+}, MAX_RUN_MS).unref();
+
+// Wait for buffered output to be written before exiting, so the last lines
+// of the log are never lost.
+function exitAfterFlush(code) {
+  process.stdout.write("", () => process.stderr.write("", () => process.exit(code)));
+}
+
+main()
+  .then(() => exitAfterFlush(0))
+  .catch((err) => {
+    console.error("[runOnce] Fatal error:", err);
+    exitAfterFlush(1);
+  });

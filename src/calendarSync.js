@@ -20,6 +20,17 @@ export function getAuthedClient() {
   return client;
 }
 
+// Google Calendar treats an all-day event's end date as EXCLUSIVE: an event
+// running 28 Sept to 18 Oct inclusive must be sent with an end date of 19 Oct,
+// or it displays as finishing a day early. Single-day events are left as
+// they always were.
+function exclusiveEndDate(date, endDate) {
+  if (!endDate || endDate <= date) return date;
+  const next = new Date(`${endDate}T00:00:00Z`);
+  next.setUTCDate(next.getUTCDate() + 1);
+  return next.toISOString().slice(0, 10);
+}
+
 function toCalendarEventId(itemId) {
   return `schoolhub${itemId.replace(/[^a-z0-9]/gi, "").toLowerCase().slice(0, 40)}`;
 }
@@ -80,7 +91,7 @@ export async function upsertCalendarEvent(item) {
     summary: `${item.category ? `[${item.category}] ` : ""}${item.summary}`,
     description: `${item.original_text}\n\nSource: ${item.source} (${item.poster || "unknown"})`,
     start: { date: item.date },
-    end: { date: item.end_date || item.date },
+    end: { date: exclusiveEndDate(item.date, item.end_date) },
     colorId: EVENT_COLOR_ID,
     reminders: {
       useDefault: false,

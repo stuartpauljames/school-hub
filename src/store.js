@@ -86,25 +86,57 @@ function jaccardSimilarity(setA, setB) {
 
 const DUPLICATE_SIMILARITY_THRESHOLD = 0.4;
 
-// Same real-world event reported by two different apps (e.g. ClassDojo and
-// MyChildAtSchool both posting about the same trip) will never share exact
-// wording, so this compares by date + how much meaningful vocabulary
-// overlaps between summaries, rather than exact text matching. Checks both
-// already-added events and anything currently sitting in someone's
+function datesOf(item) {
+  return [item.date, item.end_date].filter(Boolean);
+}
+
+function datesOverlap(a, b) {
+  const bDates = new Set(datesOf(b));
+  return datesOf(a).some((d) => bDates.has(d));
+}
+
+// The same real-world event can reach us twice: from two different apps
+// (ClassDojo and MyChildAtSchool both posting about the same trip), or from
+// ClassDojo as both a calendar-event card and an ordinary post. Wording
+// will never match exactly, so this compares by date plus how much
+// meaningful vocabulary overlaps between summaries.
+//
+// Two ordinary posts from the SAME app are deliberately never compared:
+// separate events on the same day with similar wording are far more likely
+// than a genuine duplicate, and merging them would silently lose one.
+//
+// Checks both already-added events and anything currently sitting in the
 // approval inbox, so two low-confidence duplicates queued in the same run
 // don't both get emailed either.
-export function findCrossSourceDuplicate(item) {
+export function findDuplicate(item) {
   const added = readJson(LOG_PATH, []);
   const pending = Object.values(readJson(PENDING_PATH, {}));
-  const candidates = [...added, ...pending].filter(
-    (c) => c.date === item.date && c.source !== item.source
-  );
-
   const itemWords = significantWords(item.summary);
-  for (const candidate of candidates) {
-    const similarity = jaccardSimilarity(itemWords, significantWords(candidate.summary));
-    if (similarity >= DUPLICATE_SIMILARITY_THRESHOLD) {
+
+  for (const candidate of [...added, ...pending]) {
+    if (candidate.id === item.id) continue; // the same event being saved again, not a duplicate
+
+    const differentSource = candidate.source !== item.source;
+    const differentKind = (candidate.kind || "post") !== (item.kind || "post");
+    if (!differentSource && !differentKind) continue;
+
+    // A multi-day event card starts on one date, but a post about it might
+    // give the deadline or the end date -- so any shared date counts.
+    if (!datesOverlap(item, candidate)) continue;
+
+    if (jaccardSimilarity(itemWords, significantWords(candidate.summary)) >= DUPLICATE_SIMILARITY_THRESHOLD) {
       return candidate;
+    }
+
+    // An event card and an ordinary post about the same event usually share
+    // the event's title word for word, which is a stronger signal than
+    // the AI's two differently-worded summaries.
+    if (!differentSource && differentKind) {
+      const card = item.kind === "event-card" ? item : candidate;
+      const post = card === item ? candidate : item;
+      if (card.eventTitle && post.original_text?.toLowerCase().includes(card.eventTitle.toLowerCase())) {
+        return candidate;
+      }
     }
   }
   return null;
