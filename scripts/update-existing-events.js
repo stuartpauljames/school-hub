@@ -1,6 +1,7 @@
-// Applies the current look (yellow) and reminder (6pm, two days before) to
-// the calendars and events School Hub created earlier. Colour and reminders
-// are stored on each event, and the colour of a calendar is stored on the
+// Applies the current look (yellow), reminder (6pm, two days before), and
+// title (no "[category] " prefix -- categories were removed entirely) to
+// the calendars and events School Hub created earlier. These are all
+// stored on each event, and the colour of a calendar is stored on the
 // calendar, so changing them in the code only affects things created from
 // then on.
 //
@@ -23,6 +24,15 @@ import {
   CALENDAR_FOREGROUND,
 } from "../src/style.js";
 
+// Categories were always a single lowercase word (optionally with an
+// underscore, e.g. "non_uniform") -- deliberately specific, so this only
+// ever strips School Hub's own old prefix and never touches a title that
+// merely happens to start with square brackets for some unrelated reason
+// (a ClassDojo event title, for instance).
+function stripCategoryPrefix(summary) {
+  return summary.replace(/^\[[a-z_]+\]\s*/i, "");
+}
+
 const calendarIds = [
   ...new Set(
     [
@@ -37,6 +47,7 @@ const calendarIds = [
 
 const calendar = google.calendar({ version: "v3", auth: getAuthedClient() });
 let eventsUpdated = 0;
+let titlesStripped = 0;
 let calendarsRecoloured = 0;
 let problems = 0;
 
@@ -69,17 +80,25 @@ for (const calendarId of calendarIds) {
       const { data } = await calendar.events.list({ calendarId, maxResults: 250, pageToken });
       for (const event of data.items || []) {
         if (!event.id?.startsWith("schoolhub")) continue;
+        const cleanedSummary = stripCategoryPrefix(event.summary || "");
+        const titleChanged = cleanedSummary !== event.summary;
         try {
           await calendar.events.patch({
             calendarId,
             eventId: event.id,
             requestBody: {
+              summary: cleanedSummary,
               colorId: EVENT_COLOR_ID,
               reminders: { useDefault: false, overrides: [{ method: "popup", minutes: REMINDER_MINUTES_BEFORE }] },
             },
           });
           eventsUpdated++;
-          console.log(`  updated: ${event.summary}`);
+          if (titleChanged) {
+            titlesStripped++;
+            console.log(`  updated: "${event.summary}" -> "${cleanedSummary}"`);
+          } else {
+            console.log(`  updated: ${event.summary}`);
+          }
         } catch (err) {
           problems++;
           console.error(`  FAILED: ${event.summary} -- ${err.message}`);
@@ -94,6 +113,7 @@ for (const calendarId of calendarIds) {
 }
 
 console.log(
-  `\nDone. ${calendarsRecoloured} calendar(s) recoloured, ${eventsUpdated} event(s) updated` +
+  `\nDone. ${calendarsRecoloured} calendar(s) recoloured, ${eventsUpdated} event(s) updated ` +
+    `(${titlesStripped} had a category prefix removed)` +
     `${problems ? `, ${problems} problem(s) -- see above` : ""}.`
 );
