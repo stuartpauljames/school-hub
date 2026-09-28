@@ -88,13 +88,18 @@ Open the calendar's **Settings and sharing**. Two routes:
 
 | Route | How | Good | Bad |
 | --- | --- | --- | --- |
-| **Link (recommended for a class)** | Under **Access permissions**, tick *Make available to public*, set to *See all event details*. Share the **Public address in iCal format** (under *Integrate calendar*) | Works on iPhone, Android and Outlook, no Google account needed | Anyone with the link can read it -- this is exactly why approval mode matters |
-| **Named people** | **Share with specific people**, add each parent's email with *See all event details* | Only people you add can see it | Needs a Google account per parent, and a list to maintain |
+| **Link** | Under **Access permissions**, tick *Make available to public*, set to *See all event details*. Share the **Public address in iCal format** (under *Integrate calendar*) | Works on iPhone, Android and Outlook, no Google account needed, one link to paste in a group chat | Genuinely discoverable, not just link-accessible -- Google's own warning when you tick this box says it becomes visible to the world including via Google Search. Realistically this needs someone to search quite specific matching terms to find it by chance, but it's not merely "obscure," it's the exact failure mode Google itself flags |
+| **Named people (recommended if this matters to you)** | **Share with specific people**, add each parent's email with *See all event details* | Only people you add can ever see it -- never touches the public checkbox, so there's no search-engine discoverability at all | Needs a Google account per parent, and a list to maintain as people join or leave the class |
 
 Either way, **never** grant *Make changes to events*, and never share the
 **Secret address in iCal format** -- that one is for you alone.
 
 ### A message you could send
+
+The template below is for the **link route**. If you went with **named
+people** instead, there's nothing to send -- each parent just gets an
+email from Google and the calendar appears automatically once they accept
+it.
 
 > Unofficial [year group] dates calendar: trips, payment deadlines,
 > non-uniform days and so on, taken from ClassDojo and MyChildAtSchool.
