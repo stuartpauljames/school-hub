@@ -11,7 +11,8 @@
     "authorize-google": "node scripts/authorize-google.js",
     "install-service": "node scripts/install-service.js",
     "uninstall-service": "node scripts/uninstall-service.js",
-    "doctor": "node scripts/doctor.js"
+    "doctor": "node scripts/doctor.js",
+    "update-existing-events": "node scripts/update-existing-events.js"
   },
   "dependencies": {
     "classcharts-api": "^2.0.0",

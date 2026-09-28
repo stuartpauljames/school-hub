@@ -3,11 +3,12 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { google } from "googleapis";
 import { config } from "./config.js";
+import { EVENT_COLOR_ID, REMINDER_MINUTES_BEFORE } from "./style.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TOKEN_PATH = path.join(__dirname, "..", "data", "google-token.json");
 
-function getAuthedClient() {
+export function getAuthedClient() {
   if (!fs.existsSync(TOKEN_PATH)) {
     throw new Error(
       "No Google token found. Run `npm run authorize-google` first (one-time setup)."
@@ -18,16 +19,6 @@ function getAuthedClient() {
   client.setCredentials(tokens);
   return client;
 }
-
-const CATEGORY_COLORS = {
-  trip: "9",
-  deadline: "11",
-  payment: "6",
-  meeting: "3",
-  non_uniform: "5",
-  club: "10",
-  other: "8",
-};
 
 function toCalendarEventId(itemId) {
   return `schoolhub${itemId.replace(/[^a-z0-9]/gi, "").toLowerCase().slice(0, 40)}`;
@@ -90,10 +81,10 @@ export async function upsertCalendarEvent(item) {
     description: `${item.original_text}\n\nSource: ${item.source} (${item.poster || "unknown"})`,
     start: { date: item.date },
     end: { date: item.end_date || item.date },
-    colorId: CATEGORY_COLORS[item.category] || CATEGORY_COLORS.other,
+    colorId: EVENT_COLOR_ID,
     reminders: {
       useDefault: false,
-      overrides: [{ method: "popup", minutes: 24 * 60 }],
+      overrides: [{ method: "popup", minutes: REMINDER_MINUTES_BEFORE }],
     },
   };
 

@@ -91,9 +91,12 @@ async function switchToStudent(page, { studentId, schoolId }) {
       { schoolId, studentId }
     ),
   ]);
-  // Belt-and-braces in case the reload is sometimes an AJAX update instead.
   await page.waitForLoadState("networkidle").catch(() => {});
-  await page.waitForTimeout(1000);
+  // The outer page can finish loading before the announcements panel itself
+  // has actually populated (the same timing gap solved for the very first
+  // page load) -- wait for real content to appear rather than a fixed
+  // delay, which isn't always enough after a client-side switch.
+  await page.waitForSelector(".timeline-body", { timeout: 10000 }).catch(() => {});
 }
 
 async function scrapeCurrentTimeline(page) {
@@ -190,7 +193,19 @@ async function scrapeOnce() {
     console.log(`[mcas] Found child switcher: ${children.map((c) => c.name).join(", ")}`);
     for (const child of children) {
       await switchToStudent(page, child);
-      const items = await scrapeCurrentTimeline(page);
+      let items = await scrapeCurrentTimeline(page);
+
+      if (items.length === 0) {
+        // A genuine zero seems unlikely if a sibling's timeline has content
+        // (whole-school posts should appear for both) -- more likely the
+        // panel just hadn't finished loading yet. Give it one more real
+        // chance before accepting zero as the actual answer.
+        console.warn(`[mcas]   ${child.name}: 0 items, waiting and retrying once before accepting that...`);
+        await page.waitForTimeout(3000);
+        await page.waitForSelector(".timeline-body", { timeout: 8000 }).catch(() => {});
+        items = await scrapeCurrentTimeline(page);
+      }
+
       console.log(`[mcas]   ${child.name}: ${items.length} items`);
       perChildResults.push({ childName: child.name, items });
     }

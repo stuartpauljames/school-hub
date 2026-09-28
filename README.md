@@ -202,9 +202,10 @@ path from the `classcharts-api` library). To add it:
 school-hub/
   src/
     config.js              - loads .env
+    style.js               - the one place colour and reminder settings live
     store.js                - simple JSON-file store (seen items, pending approvals, log)
     classify.js              - sends raw text to Gemini, gets structured event + confidence
-    calendarSync.js          - creates/updates Google Calendar events, categorized and color-coded
+    calendarSync.js          - creates/updates Google Calendar events
     notify.js                - sends the approval email
     server.js                - local dashboard + approve/decline links
     runOnce.js               - orchestrates one full check across all connectors
@@ -236,6 +237,19 @@ threshold; if you're getting approval emails for things that were obviously
 fine, you can lower it.
 
 ## Other things worth knowing
+
+- **Everything is yellow, and every event has a popup reminder at 6pm two
+  days before.** That covers the events, the calendars themselves, and the
+  dashboard -- there's no per-category colouring. The settings live in
+  `src/style.js`. Colour and reminders are stored on each event (and the
+  colour on each calendar), so changing them there only affects things
+  created from then on. To apply the current settings to what already
+  exists, run `npm run update-existing-events` -- it only touches events
+  School Hub created, never recolours your main personal calendar, and
+  deliberately doesn't re-run classification (the AI's wording varies
+  slightly between runs, which would create duplicates rather than update
+  what's there). Calendars the setup wizard creates are made yellow
+  automatically.
 
 - **Multi-calendar routing** (optional, most single-family setups can
   ignore this and just use `GOOGLE_CALENDAR_ID`): events can route to a

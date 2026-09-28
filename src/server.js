@@ -5,6 +5,7 @@ import { fileURLToPath } from "url";
 import { config } from "./config.js";
 import { getPending, resolvePending, logAdded } from "./store.js";
 import { upsertCalendarEvent } from "./calendarSync.js";
+import { YELLOW } from "./style.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -16,16 +17,6 @@ app.get("/favicon.svg", (req, res) => {
   res.type("image/svg+xml");
   res.sendFile(path.join(__dirname, "..", "favicon.svg"));
 });
-
-const CATEGORY_COLORS = {
-  trip: "#3f51b5",
-  deadline: "#d60000",
-  payment: "#f5511d",
-  meeting: "#8e24aa",
-  non_uniform: "#f6c026",
-  club: "#0b8043",
-  other: "#616161",
-};
 
 const STYLE = `
   :root {
@@ -50,7 +41,7 @@ const STYLE = `
     align-items: baseline;
     border-bottom: 2px solid var(--ink);
     padding-bottom: 14px;
-    margin-bottom: 8px;
+    margin-bottom: 24px;
   }
   .masthead h1 { font-size: 26px; font-weight: 600; margin: 0; letter-spacing: 0.2px; }
   .masthead .count {
@@ -58,17 +49,6 @@ const STYLE = `
     font-size: 13px;
     color: var(--slate);
   }
-  .legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 14px;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    font-size: 12px;
-    color: var(--slate);
-    margin: 16px 0 32px;
-  }
-  .legend span { display: inline-flex; align-items: center; gap: 5px; }
-  .legend i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
   .empty {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     color: var(--slate);
@@ -126,10 +106,6 @@ function layout(bodyHtml, title = "School Hub") {
   `;
 }
 
-function categoryColor(category) {
-  return CATEGORY_COLORS[category] || CATEGORY_COLORS.other;
-}
-
 function iconApproved(color) {
   return `<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 12.5l2.5 2.5L16 9"/></svg>`;
 }
@@ -157,12 +133,11 @@ function renderMessagePage({ icon, title, message, color }) {
 
 app.get("/", (req, res) => {
   const pending = getPending();
-  const categoriesInUse = [...new Set(pending.map((p) => p.category).filter(Boolean))];
 
   const itemsHtml = pending.length
     ? pending
         .map((item) => {
-          const color = categoryColor(item.category);
+          const color = YELLOW;
           return `
         <div class="item" style="--tab-color: ${color};">
           <p class="summary">${item.summary}</p>
@@ -186,12 +161,6 @@ app.get("/", (req, res) => {
         .join("")
     : `<p class="empty">Nothing waiting on you right now.</p>`;
 
-  const legendHtml = categoriesInUse.length
-    ? `<div class="legend">${categoriesInUse
-        .map((c) => `<span><i style="background: ${categoryColor(c)};"></i>${c.replace("_", " ")}</span>`)
-        .join("")}</div>`
-    : "";
-
   const installedBanner =
     req.query.installed === "1"
       ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;color:#15803d;border-radius:8px;padding:14px 18px;margin-bottom:20px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:14px;">
@@ -206,7 +175,6 @@ app.get("/", (req, res) => {
         <span class="count">${pending.length} ${pending.length === 1 ? "item" : "items"} waiting on you</span>
       </div>
       ${installedBanner}
-      ${legendHtml}
       ${itemsHtml}
     `)
   );

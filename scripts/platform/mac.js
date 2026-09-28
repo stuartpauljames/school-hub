@@ -68,12 +68,28 @@ export function installMac(projectRoot) {
       run(`launchctl bootout gui/$(id -u)/${job.label}`);
     } catch {}
 
-    try {
-      run(`launchctl bootstrap gui/$(id -u) "${plistPath}"`);
+    // launchd can still be tearing the old service down for a moment after
+    // bootout returns, and an immediate bootstrap then fails with a vague
+    // "Input/output error" that succeeds if you simply try again a moment
+    // later. Pause, then retry a few times before reporting a failure.
+    execSync("sleep 1");
+    let installed = false;
+    let lastError;
+    for (let attempt = 1; attempt <= 3 && !installed; attempt++) {
+      try {
+        run(`launchctl bootstrap gui/$(id -u) "${plistPath}"`);
+        installed = true;
+      } catch (err) {
+        lastError = err;
+        if (attempt < 3) execSync("sleep 2");
+      }
+    }
+
+    if (installed) {
       console.log(`✅ ${job.label} installed and running`);
-    } catch (err) {
-      console.log(`❌ ${job.label} failed to install`);
-      console.log(`   ${err.message}`);
+    } else {
+      console.log(`❌ ${job.label} failed to install (after 3 attempts)`);
+      console.log(`   ${lastError.message}`);
     }
   }
 

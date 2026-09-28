@@ -14,6 +14,7 @@ import { google } from "googleapis";
 import nodemailer from "nodemailer";
 import { fileURLToPath } from "url";
 import { execSync } from "child_process";
+import { CALENDAR_BACKGROUND, CALENDAR_FOREGROUND } from "../src/style.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.join(__dirname, "..");
@@ -54,10 +55,28 @@ async function createOrGetCalendarByName(name) {
   const existing = (data.items || []).find(
     (c) => c.summary?.trim().toLowerCase() === name.trim().toLowerCase()
   );
-  if (existing) return existing.id;
 
-  const { data: created } = await calendar.calendars.insert({ requestBody: { summary: name } });
-  return created.id;
+  let calendarId;
+  if (existing) {
+    calendarId = existing.id;
+    if (existing.primary) return calendarId; // never recolour a main personal calendar
+  } else {
+    const { data: created } = await calendar.calendars.insert({ requestBody: { summary: name } });
+    calendarId = created.id;
+  }
+
+  // Everything School Hub touches is yellow. Purely cosmetic, so a failure
+  // here must never stop setup.
+  try {
+    await calendar.calendarList.patch({
+      calendarId,
+      colorRgbFormat: true,
+      requestBody: { backgroundColor: CALENDAR_BACKGROUND, foregroundColor: CALENDAR_FOREGROUND },
+    });
+  } catch (err) {
+    console.warn(`[setup] Couldn't set the colour on "${name}": ${err.message}`);
+  }
+  return calendarId;
 }
 
 const STYLE = `
