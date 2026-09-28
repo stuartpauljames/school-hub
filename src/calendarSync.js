@@ -88,7 +88,7 @@ export async function upsertCalendarEvent(item) {
   console.log(`[calendarSync] Routing "${item.summary}" -> ${calendarId} (${matchedVia})`);
 
   const eventBody = {
-    summary: `${item.category ? `[${item.category}] ` : ""}${item.summary}`,
+    summary: item.summary,
     description: `${item.original_text}\n\nSource: ${item.source} (${item.poster || "unknown"})`,
     start: { date: item.date },
     end: { date: exclusiveEndDate(item.date, item.end_date) },

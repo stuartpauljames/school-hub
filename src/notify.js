@@ -37,7 +37,7 @@ export async function sendApprovalEmail(item) {
       <body>
         <div class="desktop-version" style="max-width:480px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;color:#1b2a4a;">
           <p style="margin:0 0 12px;font-size:18px;"><strong>${item.summary}</strong></p>
-          <p style="margin:0 0 4px;color:#555;">Date: ${item.date || "unclear"}${item.category ? ` &middot; Category: ${item.category}` : ""}${
+          <p style="margin:0 0 4px;color:#555;">Date: ${item.date || "unclear"}${
       item.class_name ? ` &middot; Class: ${item.class_name}` : ""
     }${item.child_name ? ` &middot; ${item.child_name}` : ""}</p>
           <p style="margin:0 0 16px;color:#555;">Source: ${item.source} (${item.poster || "unknown"}) &middot; Confidence: ${item.confidence}%</p>

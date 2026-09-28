@@ -144,7 +144,6 @@ app.get("/", (req, res) => {
           <div class="meta">
             <span>${item.date || "date unclear"}</span>
             <span>${item.source}</span>
-            ${item.category ? `<span>${item.category.replace("_", " ")}</span>` : ""}
             ${item.class_name ? `<span>${item.class_name}</span>` : ""}
             <span class="confidence">
               <span class="bar"><span class="fill" style="width: ${item.confidence}%;"></span></span>

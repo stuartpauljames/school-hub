@@ -23,7 +23,6 @@ Return ONLY a JSON object, no other text:
       "child_name": string or null,  // if household_children is known and the message clearly refers to one of them by name, use that exact name
       "class_name": string or null,  // null if the message is school-wide rather than tied to one class
       "year_group": string or null,
-      "category": one of ["trip", "deadline", "payment", "meeting", "non_uniform", "club", "other"],
       "summary": string,          // one plain sentence, under 20 words, describing THIS specific date/entry (not the whole message)
       "confidence": number        // 0-100. Score conservatively:
                                    //   - below 60 if post_date was unknown and the date had to be resolved against today instead
