@@ -67,7 +67,7 @@ export function logAdded(item) {
 // Reduces text to its meaningful words for comparison -- short/common words
 // ("the", "for", "and") are dropped since they'd inflate similarity between
 // genuinely unrelated events that just share ordinary sentence structure.
-function significantWords(text) {
+export function significantWords(text) {
   return new Set(
     (text || "")
       .toLowerCase()
@@ -77,20 +77,20 @@ function significantWords(text) {
   );
 }
 
-function jaccardSimilarity(setA, setB) {
+export function jaccardSimilarity(setA, setB) {
   if (setA.size === 0 || setB.size === 0) return 0;
   const intersection = [...setA].filter((w) => setB.has(w)).length;
   const union = new Set([...setA, ...setB]).size;
   return intersection / union;
 }
 
-const DUPLICATE_SIMILARITY_THRESHOLD = 0.4;
+export const DUPLICATE_SIMILARITY_THRESHOLD = 0.4;
 
 function datesOf(item) {
   return [item.date, item.end_date].filter(Boolean);
 }
 
-function datesOverlap(a, b) {
+export function datesOverlap(a, b) {
   const bDates = new Set(datesOf(b));
   return datesOf(a).some((d) => bDates.has(d));
 }
