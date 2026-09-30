@@ -102,8 +102,10 @@ function datesOverlap(a, b) {
 // meaningful vocabulary overlaps between summaries.
 //
 // Two ordinary posts from the SAME app are deliberately never compared:
-// separate events on the same day with similar wording are far more likely
-// than a genuine duplicate, and merging them would silently lose one.
+// free-text wording is too variable to safely compare, and separate events
+// on the same day are far more likely than a genuine duplicate. Two event
+// CARDS from the same app ARE compared, since each one describes exactly
+// one real occasion by its nature.
 //
 // Checks both already-added events and anything currently sitting in the
 // approval inbox, so two low-confidence duplicates queued in the same run
@@ -118,7 +120,17 @@ export function findDuplicate(item) {
 
     const differentSource = candidate.source !== item.source;
     const differentKind = (candidate.kind || "post") !== (item.kind || "post");
-    if (!differentSource && !differentKind) continue;
+    // Two ordinary posts from the same source are skipped -- free-text
+    // wording is too variable to safely compare, and separate events on the
+    // same day are likelier than a real duplicate. Two event CARDS from the
+    // same source are compared regardless: each one describes exactly one
+    // real occasion by its nature, so if two independently-scraped cards
+    // land on an overlapping date with near-identical summaries, that's a
+    // genuine duplicate far more often than a coincidence (confirmed by a
+    // real case: two separate ClassDojo inset-day cards each mis-extracting
+    // a shared reference list of other inset days as extra entries).
+    const bothOrdinaryPosts = (candidate.kind || "post") === "post" && (item.kind || "post") === "post";
+    if (!differentSource && bothOrdinaryPosts) continue;
 
     // A multi-day event card starts on one date, but a post about it might
     // give the deadline or the end date -- so any shared date counts.

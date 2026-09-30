@@ -94,6 +94,16 @@ Open the calendar's **Settings and sharing**. Two routes:
 Either way, **never** grant *Make changes to events*, and never share the
 **Secret address in iCal format** -- that one is for you alone.
 
+### Reminders don't carry through, and no permission level changes that
+
+Google Calendar's own documentation is explicit about this: reminders are
+private to each person's account and are never shared, whatever access
+level you grant. Each parent needs to set their own reminders for your
+calendar, on their own device -- there's no way for you to do this for
+them. *See all event details* (the level recommended above) is already
+enough for them to do this; they don't need anything more from you.
+Worth a line in whatever message you send them.
+
 ### A message you could send
 
 The template below is for the **link route**. If you went with **named
@@ -104,7 +114,9 @@ it.
 > Unofficial [year group] dates calendar: trips, payment deadlines,
 > non-uniform days and so on, taken from ClassDojo and MyChildAtSchool.
 > Read-only, updated several times a day. Always check the original post
-> before paying or sending anything in.
+> before paying or sending anything in. Want a reminder before something's
+> due? That's a setting on your own end, not something I can turn on for
+> you -- ask if you're not sure how.
 > **iPhone:** Settings > Calendar > Accounts > Add Account > Other > Add
 > Subscribed Calendar, paste the link.
 > **Android / Google:** on a computer, calendar.google.com > Other

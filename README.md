@@ -284,9 +284,45 @@ fine, you can lower it.
 - **A failed classification (rate limit, timeout, API error) is retried
   automatically on the next run** rather than being silently dropped --
   it's only marked "seen" once it's actually been classified successfully.
-- **The same real event reported by two different apps** (a trip announced
-  on both ClassDojo and MyChildAtSchool, say) is detected and only added
-  once, by comparing date plus how much meaningful vocabulary overlaps
-  between the two summaries -- exact wording will always differ between
-  apps, so this doesn't require an exact match. Look for
+- **The same real event reported twice** -- by two different apps (a trip
+  announced on both ClassDojo and MyChildAtSchool, say), by ClassDojo as
+  both a calendar-event card and an ordinary post, or by two separate
+  ClassDojo calendar-event cards that happen to overlap -- is detected and
+  only added once. It compares dates (including a multi-day event's end
+  date) plus how much meaningful vocabulary overlaps between the two, and
+  for a calendar-event card also whether an ordinary post mentions the
+  event's title. Exact wording never has to match. Two ordinary POSTS from
+  the same app are deliberately never compared, since free-text wording is
+  too variable to safely compare and separate events on the same day are
+  far likelier than a true duplicate -- but two event CARDS from the same
+  app are compared regardless, since each one describes exactly one real
+  occasion by its nature (found from a real case: two separate ClassDojo
+  inset-day cards each mis-extracting a shared reference list of other
+  inset days as extra entries -- see the next bullet). Look for
   `[runOnce] Skipping "..."` in the logs to see this catch something.
+- **A reference list isn't a set of new events.** A ClassDojo calendar-event
+  card's details page sometimes lists other, unrelated dates for context --
+  a full year's inset days, say. The classifier is now told this list is
+  background information for the one occasion the card is actually about,
+  not a set of new announcements, after a real case where two different
+  inset-day cards each turned a shared reference list into five separate
+  calendar entries.
+- **A stuck run can't block the scheduled ones.** The scheduler won't start
+  a new run while the previous one is still going, so a run that never
+  finished would quietly stop all later checks. Both browser connectors
+  always close their browser even after a failure, the run exits explicitly
+  once it's done, and a 20-minute watchdog ends any run that goes badly
+  wrong (anything already saved stays saved; anything not yet marked as seen
+  is retried next time).
+- **ClassDojo calendar events** are a separate post type with a "See
+  details" button rather than a text body. School Hub reads the card (title
+  and dates), and for each new event opens the same address the button
+  links to and reads whatever it can from the details page. If the details
+  page can't be read it uses the card alone, which already has the title
+  and dates. An event's identity is ClassDojo's own event ID, so a run
+  where the details page happens to load differently never creates a second
+  copy. The first time it sees each event it saves a screenshot and the
+  page's HTML to `data/classdojo-event-<id>.png/.html` (private, and
+  git-ignored) so the extraction can be tightened against the real page.
+  Multi-day events now show their final day correctly (Google Calendar
+  treats an all-day event's end date as exclusive).
