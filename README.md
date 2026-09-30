@@ -284,22 +284,21 @@ fine, you can lower it.
 - **A failed classification (rate limit, timeout, API error) is retried
   automatically on the next run** rather than being silently dropped --
   it's only marked "seen" once it's actually been classified successfully.
-- **The same real event reported twice** -- by two different apps (a trip
-  announced on both ClassDojo and MyChildAtSchool, say), by ClassDojo as
-  both a calendar-event card and an ordinary post, or by two separate
-  ClassDojo calendar-event cards that happen to overlap -- is detected and
-  only added once. It compares dates (including a multi-day event's end
-  date) plus how much meaningful vocabulary overlaps between the two, and
-  for a calendar-event card also whether an ordinary post mentions the
-  event's title. Exact wording never has to match. Two ordinary POSTS from
-  the same app are deliberately never compared, since free-text wording is
-  too variable to safely compare and separate events on the same day are
-  far likelier than a true duplicate -- but two event CARDS from the same
-  app are compared regardless, since each one describes exactly one real
-  occasion by its nature (found from a real case: two separate ClassDojo
-  inset-day cards each mis-extracting a shared reference list of other
-  inset days as extra entries -- see the next bullet). Look for
-  `[runOnce] Skipping "..."` in the logs to see this catch something.
+- **The same real event reported more than once** -- by two different apps
+  (a trip announced on both ClassDojo and MyChildAtSchool, say), by
+  ClassDojo as both a calendar-event card and an ordinary post, or -- the
+  most common case in practice -- the same app posting several
+  differently-worded reminders about one thing (a deposit deadline, a club
+  starting) -- is detected and only added once. Every pair is compared the
+  same way: by date (including a multi-day event's end date) plus how much
+  meaningful vocabulary overlaps between the two summaries, and for a
+  calendar-event card also whether an ordinary post mentions the event's
+  title. Exact wording never has to match. An earlier version skipped
+  comparing two ordinary posts from the same app, reasoning that separate
+  events on the same day were likelier than a genuine duplicate -- real
+  data showed the opposite, so every pair is now compared the same way
+  regardless of source or kind. Look for `[runOnce] Skipping "..."` in the
+  logs to see this catch something.
 - **A reference list isn't a set of new events.** A ClassDojo calendar-event
   card's details page sometimes lists other, unrelated dates for context --
   a full year's inset days, say. The classifier is now told this list is

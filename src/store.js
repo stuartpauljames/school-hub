@@ -95,17 +95,22 @@ function datesOverlap(a, b) {
   return datesOf(a).some((d) => bDates.has(d));
 }
 
-// The same real-world event can reach us twice: from two different apps
-// (ClassDojo and MyChildAtSchool both posting about the same trip), or from
-// ClassDojo as both a calendar-event card and an ordinary post. Wording
+// The same real-world event can reach us more than once: from two different
+// apps (ClassDojo and MyChildAtSchool both posting about the same trip),
+// from ClassDojo as both a calendar-event card and an ordinary post, or --
+// the most common case in practice -- the same app posting more than one
+// reminder about the same thing, worded differently each time. Wording
 // will never match exactly, so this compares by date plus how much
 // meaningful vocabulary overlaps between summaries.
 //
-// Two ordinary posts from the SAME app are deliberately never compared:
-// free-text wording is too variable to safely compare, and separate events
-// on the same day are far more likely than a genuine duplicate. Two event
-// CARDS from the same app ARE compared, since each one describes exactly
-// one real occasion by its nature.
+// Every pair is compared the same way, regardless of source or kind. An
+// earlier version skipped comparing two ordinary posts from the same app,
+// reasoning that separate events on the same day were likelier than a
+// genuine duplicate -- real data showed the opposite: a school posting
+// several differently-worded reminders about one thing (a deposit deadline,
+// a club starting) turned out to be the common case, not a rare one, and
+// that exemption was hiding real duplicates from an otherwise reliable
+// check rather than protecting against false ones.
 //
 // Checks both already-added events and anything currently sitting in the
 // approval inbox, so two low-confidence duplicates queued in the same run
@@ -120,17 +125,6 @@ export function findDuplicate(item) {
 
     const differentSource = candidate.source !== item.source;
     const differentKind = (candidate.kind || "post") !== (item.kind || "post");
-    // Two ordinary posts from the same source are skipped -- free-text
-    // wording is too variable to safely compare, and separate events on the
-    // same day are likelier than a real duplicate. Two event CARDS from the
-    // same source are compared regardless: each one describes exactly one
-    // real occasion by its nature, so if two independently-scraped cards
-    // land on an overlapping date with near-identical summaries, that's a
-    // genuine duplicate far more often than a coincidence (confirmed by a
-    // real case: two separate ClassDojo inset-day cards each mis-extracting
-    // a shared reference list of other inset days as extra entries).
-    const bothOrdinaryPosts = (candidate.kind || "post") === "post" && (item.kind || "post") === "post";
-    if (!differentSource && bothOrdinaryPosts) continue;
 
     // A multi-day event card starts on one date, but a post about it might
     // give the deadline or the end date -- so any shared date counts.
