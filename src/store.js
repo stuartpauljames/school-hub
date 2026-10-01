@@ -135,13 +135,22 @@ export function findDuplicate(item) {
     }
 
     // An event card and an ordinary post about the same event usually share
-    // the event's title word for word, which is a stronger signal than
-    // the AI's two differently-worded summaries.
+    // the event's title, or something very close to it -- but not always
+    // character for character: a real case had a card titled "Meet the
+    // teachers" matched against a post saying "Meet the teacher Yr4",
+    // singular, which an exact substring check missed entirely. Tolerant of
+    // a trailing plural "s" on either side for exactly that reason.
     if (!differentSource && differentKind) {
       const card = item.kind === "event-card" ? item : candidate;
       const post = card === item ? candidate : item;
-      if (card.eventTitle && post.original_text?.toLowerCase().includes(card.eventTitle.toLowerCase())) {
-        return candidate;
+      if (card.eventTitle) {
+        const title = card.eventTitle.toLowerCase();
+        const titleSingular = title.endsWith("s") ? title.slice(0, -1) : title;
+        const titlePlural = title.endsWith("s") ? title : `${title}s`;
+        const postText = (post.original_text || "").toLowerCase();
+        if (postText.includes(titleSingular) || postText.includes(titlePlural)) {
+          return candidate;
+        }
       }
     }
   }

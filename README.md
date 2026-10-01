@@ -257,8 +257,11 @@ fine, you can lower it.
   (`CLASS_CALENDARS`, for messages that name the class but not a specific
   child), or per year group (`YEAR_GROUP_CALENDARS`, for messages -- common
   on MyChildAtSchool -- that say "Year 4" rather than the class's actual
-  name), with `WHOLE_SCHOOL_CALENDAR_ID` catching anything that matches
-  none of those. The wizard sets all of this up automatically if you fill
+  name; matched by the year number alone, so "Year 4", "Yr4" and "Y4" are
+  all recognized as the same thing, after a real case where two differently
+  abbreviated mentions of the same year group landed on different
+  calendars), with `WHOLE_SCHOOL_CALENDAR_ID` catching anything that
+  matches none of those. The wizard sets all of this up automatically if you fill
   in each child's class and year group; see `CLASS_REP_GUIDE.md` for the
   full picture. Every run logs exactly which rule matched (or didn't) for
   each event -- look for `[calendarSync] Routing "..."` lines in
@@ -293,7 +296,9 @@ fine, you can lower it.
   same way: by date (including a multi-day event's end date) plus how much
   meaningful vocabulary overlaps between the two summaries, and for a
   calendar-event card also whether an ordinary post mentions the event's
-  title. Exact wording never has to match. An earlier version skipped
+  title (tolerant of a simple singular/plural difference -- "Meet the
+  teachers" the card's title vs "Meet the teacher" in a post about it, a
+  real case that an exact match missed). Exact wording never has to match. An earlier version skipped
   comparing two ordinary posts from the same app, reasoning that separate
   events on the same day were likelier than a genuine duplicate -- real
   data showed the opposite, so every pair is now compared the same way
@@ -306,6 +311,16 @@ fine, you can lower it.
   not a set of new announcements, after a real case where two different
   inset-day cards each turned a shared reference list into five separate
   calendar entries.
+- **An event's id never depends on the AI's summary wording.** Gemini can
+  phrase the exact same source message slightly differently if it's
+  classified more than once ("Flu vaccination date at school." vs "Flu
+  vaccination at school.", a real case), and the id is what decides whether
+  a run updates an existing calendar event or creates a new one -- so
+  letting the wording affect it meant a routine reclassification could
+  silently create a duplicate no amount of duplicate-detection logic would
+  ever see coming, since it happens one step earlier, before that logic
+  even runs. Calendar-event cards use ClassDojo's own event id; everything
+  else uses the raw source text and the date(s) extracted from it.
 - **A stuck run can't block the scheduled ones.** The scheduler won't start
   a new run while the previous one is still going, so a run that never
   finished would quietly stop all later checks. Both browser connectors

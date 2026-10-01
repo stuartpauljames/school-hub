@@ -12,9 +12,15 @@
 //   node scripts/cleanup-duplicate-events.js            (list only)
 //   node scripts/cleanup-duplicate-events.js --confirm  (actually delete)
 import { google } from "googleapis";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 import { config } from "../src/config.js";
 import { getAuthedClient } from "../src/calendarSync.js";
 import { significantWords, jaccardSimilarity, datesOverlap, DUPLICATE_SIMILARITY_THRESHOLD } from "../src/store.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const ADDED_LOG_PATH = path.join(__dirname, "..", "data", "added.json");
 
 const CONFIRM = process.argv.includes("--confirm");
 
@@ -72,6 +78,37 @@ let totalGroups = 0;
 let totalDeleted = 0;
 let totalAlreadyGone = 0;
 let totalProblems = 0;
+let totalBackfilled = 0;
+
+// A survivor can genuinely predate added.json tracking (exactly how tonight's
+// orphaned flu-vaccination event was found at all -- it had no entry, which
+// is why no amount of searching added.json ever turned it up). Left alone,
+// that same gap means a future reprocessing of the source message wouldn't
+// recognize this event as already handled, and could create another
+// duplicate right alongside it. So every KEPT event gets checked against
+// added.json, and backfilled if it's missing -- closing the gap for good,
+// not just cleaning up what's visible today.
+const addedLog = fs.existsSync(ADDED_LOG_PATH) ? JSON.parse(fs.readFileSync(ADDED_LOG_PATH, "utf8")) : [];
+const addedIds = new Set(addedLog.map((e) => e.id));
+const toBackfill = [];
+
+function maybeQueueBackfill(keep, calendarId) {
+  if (addedIds.has(keep.event.id)) return;
+  addedIds.add(keep.event.id); // avoid queueing the same backfill twice across groups
+  toBackfill.push({
+    id: keep.event.id,
+    source: "unknown (backfilled by cleanup-duplicate-events.js)",
+    poster: null,
+    original_text: keep.event.description || "",
+    date: keep.date,
+    end_date: keep.end_date,
+    summary: keep.summary,
+    confidence: null,
+    syncAction: "backfilled",
+    calendarId,
+    addedAt: keep.event.created || new Date().toISOString(),
+  });
+}
 
 for (const calendarId of calendarIds) {
   console.log(`\nCalendar ${calendarId}`);
@@ -107,11 +144,14 @@ for (const calendarId of calendarIds) {
   for (const group of groupDuplicates(items)) {
     totalGroups++;
     const keep = group.reduce((a, b) => pickWhichToKeep(a, b));
+    const wasMissingFromLog = !addedIds.has(keep.event.id);
+    maybeQueueBackfill(keep, calendarId);
     console.log(`\n  Duplicate group (${group.length} events):`);
     for (const g of group) {
       const range = g.end_date ? `${g.date} to ${g.end_date}` : g.date;
       const tag = g === keep ? "KEEP  " : "DELETE";
-      console.log(`    [${tag}] ${range} -- "${g.summary}"`);
+      const note = g === keep && wasMissingFromLog ? "  (had no added.json entry -- will backfill one)" : "";
+      console.log(`    [${tag}] ${range} -- "${g.summary}"${note}`);
     }
 
     for (const g of group) {
@@ -133,16 +173,23 @@ for (const calendarId of calendarIds) {
   }
 }
 
+if (CONFIRM && toBackfill.length > 0) {
+  fs.writeFileSync(ADDED_LOG_PATH, JSON.stringify([...addedLog, ...toBackfill], null, 2));
+  totalBackfilled = toBackfill.length;
+}
+
 console.log(`\n${"=".repeat(60)}`);
 if (!CONFIRM) {
   console.log(
     `Found ${totalGroups} duplicate group(s) above. Nothing has been deleted --` +
       ` this was a listing only. Review the list, then run again with` +
-      ` --confirm to actually delete the ones marked DELETE.`
+      ` --confirm to actually delete the ones marked DELETE` +
+      `${toBackfill.length ? ` (and backfill ${toBackfill.length} missing added.json entr${toBackfill.length === 1 ? "y" : "ies"})` : ""}.`
   );
 } else {
   console.log(
     `Done. ${totalGroups} duplicate group(s) found, ${totalDeleted} event(s) deleted` +
+      `${totalBackfilled ? `, ${totalBackfilled} missing added.json entr${totalBackfilled === 1 ? "y" : "ies"} backfilled` : ""}` +
       `${totalAlreadyGone ? `, ${totalAlreadyGone} already gone (no action needed)` : ""}` +
       `${totalProblems ? `, ${totalProblems} problem(s) -- see above` : ""}.`
   );

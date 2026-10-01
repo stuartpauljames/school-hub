@@ -82,13 +82,18 @@ async function main() {
       // id, derived from the specific date + summary, not just the raw
       // message, so they don't collide with each other or with a
       // single-event message's id.
-      // Calendar-event cards derive their id from ClassDojo's event id and the
-      // date only -- NOT the AI's summary wording, which can vary between
-      // runs and would otherwise turn a re-read of the same event into a
-      // second calendar entry.
+      // Never include the AI's summary wording in an event's id -- it can
+      // vary between runs even for the exact same source message (a real
+      // case: "Flu vaccination date at school." vs "Flu vaccination at
+      // school.", the same MyChildAtSchool post classified twice), which
+      // would otherwise turn a routine reclassification into a second
+      // calendar event instead of updating the first. Calendar-event cards
+      // use ClassDojo's own event id; everything else uses the raw source
+      // text plus the date(s) extracted from it -- the actual substance of
+      // what's being identified, not the AI's particular phrasing of it.
       const eventId = raw.dedupeKey
         ? hashItem(raw.source, `${raw.dedupeKey}::${event.date}`)
-        : hashItem(raw.source, `${raw.text}::${event.date}::${event.summary}`);
+        : hashItem(raw.source, `${raw.text}::${event.date}::${event.end_date || ""}`);
 
       const item = {
         id: eventId,

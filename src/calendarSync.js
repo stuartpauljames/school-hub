@@ -69,9 +69,21 @@ function resolveCalendarId(item) {
   // Fall back to year group ("Year 4") when class name didn't match or
   // wasn't extracted -- MCAS messages especially tend to say the year
   // group rather than a class's actual name.
+  // Normalizes to just the year number, so "Year 4", "Yr4", "Y4" and
+  // similar are all recognized as the same thing -- a real case showed the
+  // AI producing "Yr4" for one message and "Year 4" for another about the
+  // exact same meeting, which an exact-text match treated as unrelated and
+  // routed to two different calendars. Non-numeric year groups (Reception,
+  // Nursery) fall back to plain lowercased text comparison, same as before.
   const yearKey = item.year_group?.toLowerCase().trim();
-  if (yearKey && config.google.yearGroupCalendars[yearKey]) {
-    return { calendarId: config.google.yearGroupCalendars[yearKey], matchedVia: `year_group="${item.year_group}"` };
+  if (yearKey) {
+    const normalizedYearKey = yearKey.match(/\d+/)?.[0] || yearKey;
+    for (const [configuredYear, calendarId] of Object.entries(config.google.yearGroupCalendars)) {
+      const normalizedConfigured = configuredYear.match(/\d+/)?.[0] || configuredYear;
+      if (normalizedYearKey === normalizedConfigured) {
+        return { calendarId, matchedVia: `year_group="${item.year_group}" matched "${configuredYear}"` };
+      }
+    }
   }
 
   return {
